@@ -63,6 +63,20 @@ function shuffle(array) {
 }
 function getPlayerBySocket(sockId) { return Object.values(players).find(p => p.socketId === sockId); }
 function narratorBroadcast(message, isNight = false) { io.emit('narrator_event', { msg: message, isNight }); }
+
+// NEW: Dynamic TTS Syncing Function
+function calculateTTSDuration(text) {
+    const wordCount = text.split(/\s+/).length;
+    const wordsPerSecond = 2.5; // Approx 150 WPM
+    return Math.ceil((wordCount / wordsPerSecond) * 1000) + 1500; // Adds a 1.5-second natural pause buffer
+}
+
+async function narratorBroadcastAndWait(message, isNight = false) {
+    narratorBroadcast(message, isNight);
+    const duration = calculateTTSDuration(message);
+    await new Promise(resolve => setTimeout(resolve, duration));
+}
+
 function isMafiaTeam(role) { return ['Mafia', 'Godfather', 'Framer', 'Voodoo Lady', 'Logic Jammer', 'Consigliere', 'Mafia Murderer', 'Mafia Accomplice'].includes(role); }
 function roleInGame(role) { return Object.values(players).some(p => p.role === role); }
 function broadcastGraveyard() { io.emit('graveyard_update', Object.values(players).map(p => ({ id: p.id, name: p.name, isAlive: p.isAlive, role: p.isAlive ? null : (gameConfig.blindExecutions ? "???" : p.role) }))); }
@@ -194,8 +208,10 @@ io.on('connection', (socket) => {
         else if(gameState === 'DAY_VOTE') tallyDayVotes();
         else if(gameState === 'INTERROGATION') nextInterrogationTurn();
         else if(gameState === 'NIGHT') {
-            narratorBroadcast(`${currentNightRole}, close your eyes.`, true);
-            setTimeout(processNextNightTurn, 5000);
+            (async () => {
+                await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
+                processNextNightTurn();
+            })();
         }
     });
 
@@ -226,7 +242,6 @@ io.on('connection', (socket) => {
         for(let i=0; i < playerIds.length - reqMafia; i++) finalRoles.push(tPool.pop() || 'Villager');
         finalRoles = shuffle(finalRoles);
 
-        // Custom Deck Parsing
         activeWeapons = (config.customWeapons && config.customWeapons.trim().length > 0) ? config.customWeapons.split(',').map(s=>s.trim()).filter(s=>s) : DEFAULT_WEAPONS;
         activeLocations = (config.customLocations && config.customLocations.trim().length > 0) ? config.customLocations.split(',').map(s=>s.trim()).filter(s=>s) : DEFAULT_LOCATIONS;
 
@@ -257,42 +272,44 @@ io.on('connection', (socket) => {
         startIntroductionPhase();
     });
 
+    // FULLY SYNCHRONIZED INTRO
     async function startIntroductionPhase() {
         gameState = 'INTRO'; io.emit('phase_change', 'INTRO');
-        narratorBroadcast("Welcome. Please look at your device now to memorize your secret role.", false);
+        await narratorBroadcastAndWait("Welcome. Please look at your device now to memorize your secret role.", false);
         
-        // Wait for AI story so timing doesn't overlap
         const introStory = await getAIStory(global.gameTheme, "The mystery begins. Briefly establish the setting based on the theme. End by telling everyone to close their eyes. Keep it to 2 or 3 sentences.");
-        narratorBroadcast(introStory, false);
+        await narratorBroadcastAndWait(introStory, false);
         
         phaseEndTime = Date.now() + 20000; 
         io.emit('start_intro_timer', 20);
         
-        phaseTimeoutId = setTimeout(() => {
-            narratorBroadcast("Everyone, close your eyes. Mafia, open your eyes.", true);
-            phaseEndTime = Date.now() + 15000; // Extended to 15 seconds
+        phaseTimeoutId = setTimeout(async () => {
+            await narratorBroadcastAndWait("Everyone, close your eyes. Mafia, open your eyes.", true);
+            phaseEndTime = Date.now() + 15000; // 15 Second Mafia meeting
             io.emit('start_intro_timer', 15);
             
-            phaseTimeoutId = setTimeout(() => {
-                narratorBroadcast("Mafia, close your eyes. Everyone, open your eyes.", false);
-                phaseTimeoutId = setTimeout(startInterrogationPhase, 4000);
+            phaseTimeoutId = setTimeout(async () => {
+                await narratorBroadcastAndWait("Mafia, close your eyes. Everyone, open your eyes.", false);
+                startInterrogationPhase();
             }, 15000);
         }, 20000);
     }
 
-    function startInterrogationPhase() {
+    async function startInterrogationPhase() {
         if (roundNumber > gameConfig.maxRounds) return startFinalePhase();
         gameState = 'INTERROGATION'; io.emit('phase_change', 'INTERROGATION');
-        narratorBroadcast(`Round ${roundNumber}. The Interrogation Phase begins.`, false);
+        await narratorBroadcastAndWait(`Round ${roundNumber}. The Interrogation Phase begins.`, false);
         interrogationQueue = shuffle(Object.values(players).filter(p => p.isAlive).map(p => p.id));
         nextInterrogationTurn();
     }
 
-    function nextInterrogationTurn() {
+    async function nextInterrogationTurn() {
         if (interrogationQueue.length === 0) return startDayPhase();
         currentInterrogatorId = interrogationQueue.shift();
         const activeName = players[currentInterrogatorId].name;
-        narratorBroadcast(`It is now ${activeName}'s turn to interrogate a suspect.`, false);
+        
+        await narratorBroadcastAndWait(`It is now ${activeName}'s turn to interrogate a suspect.`, false);
+        
         const aliveList = Object.values(players).filter(p => p.isAlive).map(p => ({id: p.id, name: p.name}));
         currentInterrogationState = { activePlayerId: currentInterrogatorId, activePlayerName: activeName, status: 'SELECTING_TARGET', players: aliveList };
         io.emit('interrogation_update', currentInterrogationState);
@@ -314,7 +331,7 @@ io.on('connection', (socket) => {
         }, durationSec * 1000);
     });
 
-    socket.on('submit_clue_guess', (guess) => {
+    socket.on('submit_clue_guess', async (guess) => {
         const player = getPlayerBySocket(socket.id);
         if (!player || player.id !== currentInterrogatorId) return;
         
@@ -339,21 +356,25 @@ io.on('connection', (socket) => {
             symbol: symbol
         });
         
-        if (reportedScore === 3) narratorBroadcast(`Wait! An incredible deduction has been made! Someone correctly guessed all three pieces of the puzzle!`, false);
-        phaseTimeoutId = setTimeout(nextInterrogationTurn, 3000); 
+        if (reportedScore === 3) {
+            await narratorBroadcastAndWait(`Wait! An incredible deduction has been made! Someone correctly guessed all three pieces of the puzzle!`, false);
+        } else {
+            await new Promise(res => setTimeout(res, 2000)); // Short natural pause
+        }
+        nextInterrogationTurn(); 
     });
 
-    function startDayPhase() {
+    async function startDayPhase() {
         gameState = 'DAY'; readyPlayers.clear(); io.emit('phase_change', 'DAY');
-        narratorBroadcast(`Town Hall discussion open. ${gameConfig.dayTimer}s remain.`, false);
+        await narratorBroadcastAndWait(`Town Hall discussion is now open. You have ${gameConfig.dayTimer} seconds.`, false);
         phaseEndTime = Date.now() + (gameConfig.dayTimer * 1000);
         io.emit('start_day_timer', gameConfig.dayTimer);
         phaseTimeoutId = setTimeout(startDayVoting, gameConfig.dayTimer * 1000);
     }
 
-    function startDayVoting() {
+    async function startDayVoting() {
         gameState = 'DAY_VOTE'; dayVotes = {}; io.emit('phase_change', 'DAY_VOTE');
-        narratorBroadcast("Discussion ends. You have 30 seconds to lock in an execution vote.", false);
+        await narratorBroadcastAndWait("Discussion ends. You have 30 seconds to lock in an execution vote.", false);
         const aliveList = Object.values(players).filter(p => p.isAlive).map(p => ({id: p.id, name: p.name}));
         Object.values(players).filter(p => p.isAlive).forEach(p => io.to(p.socketId).emit('prompt_day_vote', aliveList));
         phaseEndTime = Date.now() + 30000; io.emit('start_day_vote_timer', 30);
@@ -381,12 +402,12 @@ io.on('connection', (socket) => {
         }
     }
 
-    function tallyDayVotes() {
+    async function tallyDayVotes() {
         let counts = {}; let curseTriggered = false;
 
         if (activeVoodooCurse && players[activeVoodooCurse] && players[activeVoodooCurse].isAlive && dayVotes[activeVoodooCurse]) {
             counts[dayVotes[activeVoodooCurse]] = 999; curseTriggered = true;
-            narratorBroadcast("A dark curse takes hold! All voices are silenced except one...", false);
+            await narratorBroadcastAndWait("A dark curse takes hold! All voices are silenced except one...", false);
         } else {
             Object.entries(dayVotes).forEach(([pId, target]) => {
                 if(target && target !== 'SKIP') counts[target] = (counts[target] || 0) + (players[pId].role === 'Mayor' ? 2 : 1);
@@ -399,34 +420,35 @@ io.on('connection', (socket) => {
             if (c > max) { max = c; accId = id; tie = false; } else if (c === max) tie = true;
         }
 
-        if (tie || !accId) narratorBroadcast("The town is deadlocked. No execution takes place.", false);
-        else {
+        if (tie || !accId) {
+            await narratorBroadcastAndWait("The town is deadlocked. No execution takes place.", false);
+        } else {
             players[accId].isAlive = false; 
             let roleReveal = players[accId].role;
             if (roleReveal === 'Mafia') roleReveal = (accId === trueMurderer) ? "Mafia Murderer" : "Mafia Accomplice";
             
             if (gameConfig.blindExecutions) {
-                narratorBroadcast(`${players[accId].name} was executed by the town. Their true role remains a mystery.`, false);
+                await narratorBroadcastAndWait(`${players[accId].name} was executed by the town. Their true role remains a mystery.`, false);
             } else {
-                narratorBroadcast(`${players[accId].name} was executed by the town. They were a ${roleReveal}.`, false);
+                await narratorBroadcastAndWait(`${players[accId].name} was executed by the town. They were a ${roleReveal}.`, false);
             }
 
             if (isMafiaTeam(players[accId].role)) {
                 let cluesToGive = parseInt(gameConfig.cluesPerExecution) || 0;
-                if(cluesToGive > 0) narratorBroadcast(`A search of their belongings revealed secrets...`, false);
-                for(let i=0; i<cluesToGive; i++) narratorBroadcast(generateUniqueMafiaClue(), false);
+                if(cluesToGive > 0) await narratorBroadcastAndWait(`A search of their belongings revealed secrets...`, false);
+                for(let i=0; i<cluesToGive; i++) await narratorBroadcastAndWait(generateUniqueMafiaClue(), false);
             }
         }
         broadcastGraveyard();
-        setTimeout(startNightPhase, 7000);
+        startNightPhase(); // Start night smoothly without arbitrary timeout
     }
 
     // --- DYNAMIC NIGHT SEQUENCER ---
-    function startNightPhase() {
+    async function startNightPhase() {
         gameState = 'NIGHT'; jammedPlayers.clear();
         nightActions = { mafiaVotes: {}, doctorTarget: null, detectiveTarget: null, framerTarget: null, voodooTarget: null, socialiteTarget: null, vigilanteTarget: null, jammerTarget: null };
         io.emit('phase_change', 'NIGHT');
-        narratorBroadcast("Night falls. All eyes closed.", true);
+        await narratorBroadcastAndWait("Night falls. Everyone, close your eyes.", true);
         
         nightSequence = [];
         if (roleInGame('Socialite')) nightSequence.push('Socialite');
@@ -441,12 +463,12 @@ io.on('connection', (socket) => {
         const vigPlayer = Object.values(players).find(p => p.role === 'Vigilante');
         if (vigPlayer && vigilanteBullets[vigPlayer.id] > 0) nightSequence.push('Vigilante');
 
-        setTimeout(processNextNightTurn, 5000);
+        processNextNightTurn();
     }
 
-    function processNextNightTurn() {
+    async function processNextNightTurn() {
         if (currentNightRole) io.emit('close_night_action');
-        if (nightSequence.length === 0) return setTimeout(resolveNight, 3000);
+        if (nightSequence.length === 0) return resolveNight();
         
         currentNightRole = nightSequence.shift();
         let rolePlayers = Object.values(players).filter(p => currentNightRole === 'Mafia' ? isMafiaTeam(p.role) : p.role === currentNightRole);
@@ -456,9 +478,11 @@ io.on('connection', (socket) => {
 
         let time = expectedNightSubmissions > 0 ? 30 : Math.floor(Math.random() * 6) + 5;
         let msg = currentNightRole === 'Mafia' ? "Mafia, open your eyes and select a victim." : `${currentNightRole}, open your eyes.`;
-        nightTimerEndTime = Date.now() + (time * 1000);
-        narratorBroadcast(msg, true);
         
+        // Wait for narrator to say the line BEFORE starting the timer
+        await narratorBroadcastAndWait(msg, true);
+        
+        nightTimerEndTime = Date.now() + (time * 1000);
         let validTargets = Object.values(players).filter(p => p.isAlive);
         if (currentNightRole === 'Voodoo Lady') validTargets = validTargets.filter(p => !isMafiaTeam(p.role));
 
@@ -466,9 +490,10 @@ io.on('connection', (socket) => {
             io.to(p.socketId).emit('night_action_phase', { role: currentNightRole, time: time, players: validTargets.map(v=>({id:v.id,name:v.name})), weapons: activeWeapons, locations: activeLocations });
         });
         
-        nightTimerTimeout = setTimeout(() => {
-            narratorBroadcast(`${currentNightRole}, close your eyes.`, true);
-            setTimeout(processNextNightTurn, 5000); // 5 SECOND DELAY
+        nightTimerTimeout = setTimeout(async () => {
+            await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
+            await new Promise(res => setTimeout(res, 1000)); // Natural 1-second pause
+            processNextNightTurn();
         }, time * 1000);
     }
 
@@ -505,8 +530,11 @@ io.on('connection', (socket) => {
         currentNightSubmissions++;
         if(currentNightSubmissions >= expectedNightSubmissions && expectedNightSubmissions > 0) {
             clearTimeout(nightTimerTimeout);
-            narratorBroadcast(`${currentNightRole}, close your eyes.`, true);
-            setTimeout(processNextNightTurn, 5000); // 5 SECOND DELAY
+            (async () => {
+                await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
+                await new Promise(res => setTimeout(res, 1000));
+                processNextNightTurn();
+            })();
         }
     });
 
@@ -519,8 +547,11 @@ io.on('connection', (socket) => {
                 if (targets.length === 1) {
                     nightActions.lockedMafiaTarget = targets[0];
                     clearTimeout(nightTimerTimeout);
-                    narratorBroadcast("Mafia, close your eyes.", true);
-                    setTimeout(processNextNightTurn, 5000); // 5 SECOND DELAY
+                    (async () => {
+                        await narratorBroadcastAndWait("Mafia, close your eyes.", true);
+                        await new Promise(res => setTimeout(res, 1000));
+                        processNextNightTurn();
+                    })();
                 }
             }
         }
@@ -550,29 +581,27 @@ io.on('connection', (socket) => {
         if (mTarget && mTarget !== nightActions.doctorTarget) diedTonight.push(mTarget);
         if (vigTarget && vigTarget !== nightActions.doctorTarget) diedTonight.push(vigTarget);
 
-        narratorBroadcast("Morning comes. Everyone, open your eyes.", false);
+        await narratorBroadcastAndWait("Morning comes. Everyone, open your eyes.", false);
         
         // Wait for AI story so timing doesn't overlap
         const story = await getAIStory(global.gameTheme, diedTonight.length === 0 ? "The night was unusually still and quiet. No one was harmed." : `The group wakes to find ${diedTonight.map(id => players[id].name).join(' and ')} eliminated.`);
-        narratorBroadcast(story, false);
+        await narratorBroadcastAndWait(story, false);
         
-        phaseTimeoutId = setTimeout(() => {
-            diedTonight.forEach(id => { players[id].isAlive = false; });
-            broadcastGraveyard();
-            roundNumber++;
-            startInterrogationPhase();
-        }, 8000);
+        diedTonight.forEach(id => { players[id].isAlive = false; });
+        broadcastGraveyard();
+        roundNumber++;
+        startInterrogationPhase();
     }
 
-    function startFinalePhase() {
+    async function startFinalePhase() {
         gameState = 'FINALE'; finaleGuesses = {}; io.emit('phase_change', 'FINALE');
-        narratorBroadcast("The time of final judgment is here. Submit your accusations.", false);
+        await narratorBroadcastAndWait("The time of final judgment is here. Submit your accusations.", false);
         Object.values(players).filter(p => p.isAlive).forEach(p => {
             io.to(p.socketId).emit('prompt_finale_guess', { weapons: activeWeapons, locations: activeLocations, playerList: Object.values(players) });
         });
     }
 
-    socket.on('submit_finale_guess', (guess) => {
+    socket.on('submit_finale_guess', async (guess) => {
         const p = getPlayerBySocket(socket.id);
         if (gameState === 'FINALE' && p?.isAlive) {
             finaleGuesses[p.id] = guess;
@@ -583,7 +612,7 @@ io.on('connection', (socket) => {
                 }
                 const truth = `${players[trueMurderer].name} in the ${trueLocation} with the ${trueWeapon}`;
                 gameState = 'GAME_OVER'; io.emit('phase_change', 'GAME_OVER');
-                narratorBroadcast(vWon ? `🟢 VILLAGERS WIN! Truth: ${truth}` : `❌ MAFIA WINS! Truth: ${truth}`, false);
+                await narratorBroadcastAndWait(vWon ? `🟢 VILLAGERS WIN! Truth: ${truth}` : `❌ MAFIA WINS! Truth: ${truth}`, false);
             }
         }
     });
