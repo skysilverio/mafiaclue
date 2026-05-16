@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mafia x Clue</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; transition: 0.5s; background: #f4f4f4; }
+        .hidden { display: none !important; }
+        .night-mode { background: #111; color: white; }
+        input, select, button, textarea { padding: 10px; margin: 5px; border-radius: 6px; width: 90%; max-width: 300px; border: 1px solid #ccc; box-sizing: border-box; }
+        button { cursor: pointer; background: #eee; }
+        .btn-primary { background: #4CAF50; color: white; border: none; font-weight: bold; }
+        .btn-host { background: #333; color: white; border: none; }
+        .btn-ready { background: #2196F3; color: white; border: none; width: 100%; font-size: 16px; padding: 15px; margin-top: 10px; font-weight:bold; }
+        #narrator-box { background: #222; color: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: left; border-left: 5px solid #ffaa00; }
+        .timer { font-size: 2em; color: #ff4444; font-weight: bold; }
+        
+        /* Interactive Clue Board */
+        #reference-board { display: flex; flex-direction: column; gap: 10px; background: #222; color: #fff; padding: 15px; border-radius: 8px; margin-top: 15px; text-align: left; }
+        .clue-category { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+        .clue-btn { background: #555; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: calc(50% - 5px); }
+        .clue-btn.state-1 { background: #602020; text-decoration: line-through; color: #aaa; }
+        .clue-btn.state-2 { background: #553a00; border: 1px solid #FF9800; color: #fff; } /* Partial Match */
+        .clue-btn.state-3 { background: #206020; border: 1px solid #4CAF50; color: #fff; } /* Confirmed */
+        .graveyard-dead { text-decoration: line-through; color: #ff4444; }
+
+        /* Custom Toasts */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-weight: bold; animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 4.5s forwards; min-width: 250px; text-align: center; }
+        .toast.success { background: #4CAF50; border: 2px solid #388E3C; }
+        .toast.warning { background: #FF9800; border: 2px solid #F57C00; }
+        .toast.error { background: #F44336; border: 2px solid #D32F2F; }
+        @keyframes slideIn { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; visibility: hidden; } }
+
+        /* Modals & Tooltips */
+        #phase-tooltip { position: absolute; background: #333; color: #ffaa00; padding: 10px; border-radius: 6px; font-size: 13px; max-width: 280px; z-index: 50; text-align: left; margin-left: auto; margin-right: auto; left: 0; right: 0; }
+        #guide-modal { position: fixed; top: 5%; left: 5%; width: 90%; height: 90%; background: #fff; color: #000; z-index: 1000; border-radius: 8px; overflow-y: auto; padding: 20px; border: 3px solid #333; text-align: left; }
+        .guide-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index: 999; }
+        
+        /* Host Controls */
+        .host-panel { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; text-align: left; border: 1px solid #ddd; }
+        .host-section { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        .input-group label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+        .flex-row { display: flex; gap: 15px; margin-bottom: 10px; }
+        .flex-row .input-group { flex: 1; }
+        .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .checkbox-label { display: flex; align-items: center; font-size: 14px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="toast-container"></div>
+    <button onclick="toggleGuide()" style="position: absolute; top: 10px; right: 10px; background: #333; color: white;">📖 Guide</button>
+
+    <div id="login">
+        <h1>Mafia x Clue</h1>
+        <input type="text" id="name-input" placeholder="Name">
+        <button class="btn-primary" onclick="joinLobby()">Join Player</button><br><br>
+        <button class="btn-host" onclick="joinAsHost()">🖥️ Host Display</button>
+    </div>
+
+    <div id="lobby" class="hidden">
+        <h2>Lobby</h2>
+        <h3 id="player-count">0 Players</h3>
+        <ul id="player-list" style="list-style: none; padding:0;"></ul>
+        
+        <div id="host-controls" class="hidden host-panel">
+            <h3 style="margin-top:0;">⚙️ Game Settings</h3>
+            <div class="host-section">
+                <div class="input-group"><label>Theme / Vibe:</label><input type="text" id="vibe-input" placeholder="e.g. Victorian Noir"></div>
+                <div class="flex-row">
+                    <div class="input-group"><label>Total Mafia:</label><input type="number" id="config-mafia" value="1"></div>
+                    <div class="input-group"><label>Max Rounds:</label><input type="number" id="config-max-rounds" value="3"></div>
+                </div>
+                <div class="flex-row">
+                    <div class="input-group"><label>Interrogation (sec):</label><input type="number" id="config-timer" value="60"></div>
+                    <div class="input-group"><label>Day Discussion (sec):</label><input type="number" id="config-day-timer" value="120"></div>
+                </div>
+            </div>
+            <div class="host-section">
+                <h4 style="margin-top:0; color: #2196F3;">Advanced Rules</h4>
+                <div class="input-group"><label>Custom Weapons (Comma separated):</label><input type="text" id="config-wep" placeholder="Leave blank for default"></div>
+                <div class="input-group"><label>Custom Locations (Comma separated):</label><input type="text" id="config-loc" placeholder="Leave blank for default"></div>
+                <div class="flex-row" style="align-items: center; margin-top: 15px;">
+                    <div class="input-group"><label>Clues per Execution:</label><input type="number" id="config-clues" value="2" min="0" max="5"></div>
+                    <label class="checkbox-label" style="font-weight: bold; color: #ff4444;"><input type="checkbox" id="config-blind"> Blind Executions (Hide Dead Roles)</label>
+                </div>
+            </div>
+            <div class="host-section">
+                <h4 style="margin-top:0; color: #4CAF50;">Town Roles (Max 1 each)</h4>
+                <div class="checkbox-grid">
+                    <label class="checkbox-label"><input type="checkbox" id="role-doctor" checked> Doctor</label>
+                    <label class="checkbox-label"><input type="checkbox" id="role-detective" checked> Detective</label>
+                    <label class="checkbox-label"><input type="checkbox" id="role-mayor"> Mayor</label>
+                    <label class="checkbox-label"><input type="checkbox" id="role-agent"> Intelligence Agent</label>
+                    <label class="checkbox-label"><input type="checkbox" id="role-socialite"> Socialite</label>
+                    <label class="checkbox-label"><input type="checkbox" id="role-vigilante"> Vigilante</label>
+                </div>
+            </div>
+            <div class="host-section">
+                <h4 style="margin-top:0; color: #ff4444;">Mafia Roles (Max 1 each)</h4>
+                <div class="checkbox-grid">
+                    <label class="checkbox-label"><input type="checkbox" id="role-godfather"> Godfather</label>
+                    <label class="checkbox-label"><input type="checkbox" id="role-framer"> Framer</label>
+                    <label class="checkbox-label"><input type="checkbox" id="role-jammer"> Logic Jammer</label>
+                    <label class="checkbox-label"><input type="checkbox" id="role-consigliere"> Consigliere</label>
+                    <label class="checkbox-label"><input type="checkbox" id="role-voodoo"> Voodoo Lady</label>
+                </div>
+            </div>
+            <button class="btn-primary" onclick="startGame()" style="width:100%; font-size: 16px; font-weight: bold; padding: 12px;">Start Game</button>
+        </div>
+        
+        <div id="host-god-mode" class="hidden host-panel" style="border: 2px solid #ff4444;">
+            <h3 style="color: #ff4444; margin-top:0;">⚡ Host God Mode</h3>
+            <button class="btn-primary" style="background:#ff4444;" onclick="socket.emit('host_force_next')">Force Next Phase ⏩</button>
+            <div style="margin-top:10px;">
+                <select id="kick-target"></select>
+                <button onclick="socket.emit('host_kick_player', document.getElementById('kick-target').value)">Kick Player</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-board" class="hidden">
+        <h2 style="margin-bottom: 5px;">
+            <span id="phase-title">Phase</span> 
+            <span style="font-size: 14px; color: #888; cursor: pointer; vertical-align: middle; background: #eee; border-radius: 50%; padding: 2px 6px;" onclick="document.getElementById('phase-tooltip').classList.toggle('hidden')">?</span>
+        </h2>
+        <div id="phase-tooltip" class="hidden player-only"></div>
+        
+        <div id="role-container" class="hidden player-only" style="background:#222; padding:10px; border-radius:8px; margin-bottom: 15px;">
+            <button id="toggle-role-btn" onclick="toggleRoleVisibility()" style="background: #444; color: white; border: none; padding: 8px 15px; border-radius: 5px; font-size: 14px; width: 100%;">👁️ Show Secret Role</button>
+            <div id="role-display-content" class="hidden" style="margin-top: 10px;">
+                <h3 id="role-display" style="margin: 0; padding: 5px;"></h3>
+                <div id="role-tooltip" style="background: #555; color: white; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 14px; text-align: left;"></div>
+            </div>
+        </div>
+        
+        <div id="narrator-box">
+            <h3 style="margin-top:0;">🎤 Narrator</h3>
+            <ul id="narrator-log" style="list-style: none; padding: 0; margin: 0; max-height: 120px; overflow-y: auto;"></ul>
+        </div>
+
+        <div id="reference-board" class="hidden player-only">
+            <div><h4 style="margin:0; color:#ffaa00;">Suspects</h4><div id="ref-players" class="clue-category"></div></div>
+            <div><h4 style="margin:0; color:#ffaa00;">Locations</h4><div id="ref-locations" class="clue-category"></div></div>
+            <div><h4 style="margin:0; color:#ffaa00;">Weapons</h4><div id="ref-weapons" class="clue-category"></div></div>
+            <textarea id="notepad" placeholder="Extra Detective Notes..." style="height:60px; width: 100%; margin: 10px 0 0 0;"></textarea>
+        </div>
+
+        <div id="intro-zone" class="hidden player-only">
+            <h3>Memorize Your Role</h3>
+            <div class="timer" id="intro-clock">00:00</div>
+        </div>
+
+        <div id="day-zone" class="hidden player-only">
+            <div id="day-timer-display" class="hidden">
+                <p>Discussion:</p><div class="timer" id="day-clock">00:00</div>
+                <button id="ready-btn" class="btn-ready" onclick="emitReady()">Ready to Vote <span id="ready-count">(0/0)</span></button>
+            </div>
+            <div id="day-vote-form" class="hidden"><p>Vote to Execute:</p><div id="day-vote-targets"></div></div>
+        </div>
+
+        <div id="interrogation-zone" class="hidden player-only">
+            <h3 id="interrogation-status">Interrogation</h3>
+            <div id="target-selection"></div>
+            <div id="timer-display" class="hidden"><div class="timer" id="clock">00:00</div></div>
+            <div id="guess-form" class="hidden">
+                <select id="guess-murderer"></select><select id="guess-location"></select><select id="guess-weapon"></select>
+                <button class="btn-primary" onclick="submitGuess()">Confirm Guess</button>
+            </div>
+        </div>
+
+        <div id="night-timer-display" class="hidden player-only"><div class="timer" id="night-clock">00:00</div></div>
+        <div id="action-zone" class="hidden player-only"><h3 id="action-title">Action</h3><div id="action-targets"></div></div>
+        
+        <div id="mafia-zone" class="hidden player-only">
+            <div id="chat-box" style="height:100px; overflow-y:auto; background:#000; text-align:left; padding:5px; color:#fff;"></div>
+            <input type="text" id="chat-input" placeholder="Mafia Chat..."><button onclick="sendChat()">Send</button>
+            <div id="vote-targets" style="margin-top:10px;"></div>
+        </div>
+
+        <div id="finale-zone" class="hidden player-only">
+            <h3>Final Accusation</h3>
+            <div id="finale-form">
+                <select id="finale-murderer"></select><select id="finale-location"></select><select id="finale-weapon"></select>
+                <button class="btn-primary" onclick="submitFinale()">Lock In</button>
+            </div>
+            <div id="finale-status" class="hidden">
+                <h3 style="color: #4CAF50;">Accusation Locked In!</h3>
+                <p>Waiting for other players...</p>
+            </div>
+        </div>
+
+        <button class="btn-reset hidden" id="reset-btn" onclick="socket.emit('reset_game')" style="margin-top: 20px;">Reset Server</button>
+    </div>
+
+    <div id="guide-overlay" class="guide-overlay hidden" onclick="toggleGuide()"></div>
+    <div id="guide-modal" class="hidden">
+        <button onclick="toggleGuide()" style="float:right; background:#ff4444; color:white; border:none; padding:5px 10px; font-weight: bold; cursor: pointer;">X</button>
+        <h2 style="margin-top:0;">📖 HOW TO PLAY</h2>
+        <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
+            <p style="margin-top:0;"><b>The Goal:</b> The Town must deduce the exact details of the crime (Who, Where, What) or execute all Mafia. The Mafia must eliminate the Town.</p>
+            <p><b>1. Interrogation:</b> Players take turns guessing the crime. The server grades it: 🟢 (All 3 correct), ⚠️ (1 or 2 correct), ❌ (None correct), 🌀 (Jammed).</p>
+            <p><b>2. Town Hall:</b> Discuss clues and vote to execute a suspect.</p>
+            <p><b>3. Night:</b> Mafia secretly chats and eliminates. Special roles wake up to use abilities.</p>
+            <p style="margin-bottom:0;"><b>4. Finale:</b> If the final round is reached, players simultaneously lock in a final accusation.</p>
+        </div>
+        <h3 style="color: #ff4444; border-bottom: 2px solid #ff4444; padding-bottom: 5px;">Mafia Team</h3>
+        <div id="guide-mafia"></div>
+        <h3 style="color: #4CAF50; border-bottom: 2px solid #4CAF50; padding-bottom: 5px; margin-top: 20px;">Town Team</h3>
+        <div id="guide-town"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const synth = window.speechSynthesis;
+        let isHost = false, myId = localStorage.getItem('mafia_id') || 'p'+Math.random().toString(36).substr(2,7);
+        localStorage.setItem('mafia_id', myId);
+        let myCoreRole = "";
+        let activeClientTimer = null;
+
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => { toast.remove(); }, 5000);
+        }
+
+        socket.on('toast_msg', (d) => {
+            showToast(d.text, d.type);
+            if(d.notepadText) {
+                const np = document.getElementById('notepad');
+                np.value += d.notepadText; 
+                localStorage.setItem('mafia_notepad_' + myId, np.value);
+            }
+        });
+
+        // UI Toggles
+        function toggleRoleVisibility() {
+            const content = document.getElementById('role-display-content');
+            const btn = document.getElementById('toggle-role-btn');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden'); btn.innerText = '🙈 Hide Secret Role';
+            } else {
+                content.classList.add('hidden'); btn.innerText = '👁️ Show Secret Role';
+            }
+        }
+
+        // Clue Board Logic (4 States)
+        function buildClueCategory(containerId, items, isPlayerList = false) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            items.forEach(item => {
+                const name = isPlayerList ? item.name : item;
+                const deadClass = (isPlayerList && !item.isAlive) ? 'graveyard-dead' : '';
+                const roleTag = (isPlayerList && item.role) ? ` (${item.role})` : '';
+                
+                const savedState = localStorage.getItem(`clue_${myId}_${name}`) || 0;
+                
+                const btn = document.createElement('button');
+                btn.className = `clue-btn state-${savedState}`;
+                btn.innerHTML = `<span class="${deadClass}">${name}${roleTag}</span> <span class="icon">${savedState == 1 ? '❌' : (savedState == 2 ? '⚠️' : (savedState == 3 ? '✅' : '❓'))}</span>`;
+                
+                btn.onclick = function() {
+                    let s = parseInt(localStorage.getItem(`clue_${myId}_${name}`) || 0);
+                    s = (s + 1) % 4; // Cycle through 4 states (0=Unknown, 1=Eliminated, 2=Partial, 3=Confirmed)
+                    localStorage.setItem(`clue_${myId}_${name}`, s);
+                    this.className = `clue-btn state-${s}`;
+                    this.querySelector('.icon').innerText = s == 1 ? '❌' : (s == 2 ? '⚠️' : (s == 3 ? '✅' : '❓'));
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        socket.on('graveyard_update', (list) => {
+            if(!isHost && document.getElementById('ref-players').innerHTML !== '') {
+                buildClueCategory('ref-players', list, true);
+            }
+            if(isHost) {
+                const k = document.getElementById('kick-target'); k.innerHTML = '';
+                list.forEach(p => k.innerHTML += `<option value="${p.id}">${p.name}</option>`);
+            }
+        });
+
+        const savedNotepad = localStorage.getItem('mafia_notepad_' + myId);
+        if (savedNotepad) document.getElementById('notepad').value = savedNotepad;
+        document.getElementById('notepad').addEventListener('input', (e) => localStorage.setItem('mafia_notepad_' + myId, e.target.value));
+
+        socket.on('connect', () => socket.emit('rejoin_attempt', myId));
+        socket.on('rejoin_success', () => document.getElementById('login').classList.add('hidden'));
+
+        const ROLE_DESCRIPTIONS = {
+            "Consigliere": "Investigates one weapon or location each night to see if it is part of the true crime.",
+            "Logic Jammer": "Targets a player each night. If that player interrogates someone the next day, their result is jammed.",
+            "Framer": "Selects one player each night to frame. If investigated, they falsely appear as Mafia.",
+            "Godfather": "Immune to police scrutiny. Falsely appears as Innocent to the Detective.",
+            "Voodoo Lady": "Curses one non-Mafia player. Tomorrow, ONLY the cursed player's vote will count.",
+            "Mafia Murderer": "You are the trigger-man. Work with your team to eliminate the town.",
+            "Mafia Accomplice": "Help the Murderer decide who to eliminate.",
+            "Mafia": "Work with your team to eliminate the town.",
+            "Intelligence Agent": "Investigates one weapon or location each night to see if it is part of the true crime.",
+            "Detective": "Investigates one player per night to reveal their true alignment.",
+            "Doctor": "Protects one player each night from elimination. Can self-protect.",
+            "Mayor": "During the daytime execution phase, your vote counts as TWO votes.",
+            "Socialite": "Selects one player each night to distract, canceling their night action.",
+            "Vigilante": "Armed with a single bullet to shoot someone at night. You can skip your turn.",
+            "Villager": "Use your intuition and the interrogation phase to deduce the truth."
+        };
+
+        const PHASE_TOOLTIPS = {
+            "INTRO": "Memorize your secret role and review your abilities.",
+            "INTERROGATION": "Pay attention to the clues! Select a target and guess Who, Where, and What.",
+            "DAY": "Discuss clues and vote to execute a suspect.",
+            "NIGHT": "Keep your eyes closed unless the Narrator calls your specific role.",
+            "FINALE": "Use your notepad to submit your final, official accusation.",
+            "LOBBY": "Waiting for the host.", "DAY_VOTE": "Lock in your vote."
+        };
+
+        let guideM = "", guideT = "";
+        ['Godfather', 'Logic Jammer', 'Consigliere', 'Framer', 'Voodoo Lady', 'Mafia Murderer', 'Mafia Accomplice'].forEach(r => guideM += `<p style="font-size:14px; margin-bottom:5px;"><b>${r}:</b> ${ROLE_DESCRIPTIONS[r]}</p>`);
+        ['Intelligence Agent', 'Detective', 'Doctor', 'Mayor', 'Socialite', 'Vigilante', 'Villager'].forEach(r => guideT += `<p style="font-size:14px; margin-bottom:5px;"><b>${r}:</b> ${ROLE_DESCRIPTIONS[r]}</p>`);
+        document.getElementById('guide-mafia').innerHTML = guideM; document.getElementById('guide-town').innerHTML = guideT;
+
+        function toggleGuide() { document.getElementById('guide-modal').classList.toggle('hidden'); document.getElementById('guide-overlay').classList.toggle('hidden'); }
+        async function enableNoSleep() { if ('wakeLock' in navigator) { try { await navigator.wakeLock.request('screen'); } catch (e) {} } }
+
+        function startVisualTimer(elementId, durationSeconds, prefix = "") {
+            clearInterval(activeClientTimer);
+            document.getElementById(elementId).parentElement.classList.remove('hidden');
+            const endTimeMs = Date.now() + (durationSeconds * 1000);
+            activeClientTimer = setInterval(() => {
+                let remaining = Math.max(0, Math.round((endTimeMs - Date.now()) / 1000));
+                document.getElementById(elementId).innerText = prefix + remaining + "s";
+                if (remaining <= 0) clearInterval(activeClientTimer);
+            }, 1000);
+        }
+
+        function joinLobby() {
+            const n = document.getElementById('name-input').value;
+            if(n) { socket.emit('join_lobby', {id:myId, name:n}); document.getElementById('login').classList.add('hidden'); document.getElementById('lobby').classList.remove('hidden'); enableNoSleep(); }
+        }
+
+        function joinAsHost() {
+            isHost = true; socket.emit('claim_host');
+            document.getElementById('login').classList.add('hidden'); document.getElementById('lobby').classList.remove('hidden');
+            document.getElementById('host-controls').classList.remove('hidden'); document.getElementById('host-god-mode').classList.remove('hidden');
+            document.querySelectorAll('.player-only').forEach(e => e.style.display='none');
+        }
+
+        socket.on('host_success', () => document.getElementById('reset-btn').classList.remove('hidden'));
+        socket.on('update_players', (list) => {
+            document.getElementById('player-count').innerText = list.length + " Players";
+            document.getElementById('player-list').innerHTML = list.map(p => `<li>${p.name}</li>`).join('');
+        });
+
+        function startGame() {
+            socket.emit('start_game', {
+                theme: document.getElementById('vibe-input').value,
+                timer: parseInt(document.getElementById('config-timer').value),
+                dayTimer: parseInt(document.getElementById('config-day-timer').value),
+                mafiaCount: parseInt(document.getElementById('config-mafia').value),
+                maxRounds: parseInt(document.getElementById('config-max-rounds').value),
+                customWeapons: document.getElementById('config-wep').value,
+                customLocations: document.getElementById('config-loc').value,
+                cluesPerExecution: document.getElementById('config-clues').value,
+                blindExecutions: document.getElementById('config-blind').checked,
+                roles: { doctor: document.getElementById('role-doctor').checked, detective: document.getElementById('role-detective').checked, mayor: document.getElementById('role-mayor').checked, agent: document.getElementById('role-agent').checked, socialite: document.getElementById('role-socialite').checked, vigilante: document.getElementById('role-vigilante').checked, godfather: document.getElementById('role-godfather').checked, jammer: document.getElementById('role-jammer').checked, consigliere: document.getElementById('role-consigliere').checked, framer: document.getElementById('role-framer').checked, voodoo: document.getElementById('role-voodoo').checked }
+            });
+        }
+
+        socket.on('role_assigned', (d) => {
+            if(isHost) return;
+            myCoreRole = d.coreRole; 
+            const isEvil = ['Mafia', 'Godfather', 'Framer', 'Voodoo Lady', 'Logic Jammer', 'Consigliere'].includes(myCoreRole);
+            const teamString = isEvil ? "MAFIA TEAM" : "TOWN TEAM";
+            const teamColor = isEvil ? "#ff4444" : "#4CAF50"; 
+            
+            document.getElementById('role-display').style.color = teamColor;
+            document.getElementById('role-display').innerHTML = `YOUR ROLE: ${d.displayRole}<br><span style="font-size:12px; color:#aaa;">(${teamString})</span>`;
+            document.getElementById('role-tooltip').innerHTML = `<b>${d.coreRole}</b><br>${ROLE_DESCRIPTIONS[d.coreRole] || ""}`;
+
+            buildClueCategory('ref-players', d.playerList, true);
+            buildClueCategory('ref-locations', d.locations);
+            buildClueCategory('ref-weapons', d.weapons);
+            document.getElementById('reference-board').classList.remove('hidden');
+        });
+
+        socket.on('phase_change', (p) => {
+            document.getElementById('phase-title').innerText = p.replace('_', ' ') + " PHASE";
+            document.getElementById('phase-tooltip').innerText = PHASE_TOOLTIPS[p] || "Pay attention to the narrator!";
+            document.getElementById('phase-tooltip').classList.add('hidden'); 
+            document.body.classList.toggle('night-mode', p === 'NIGHT' || p === 'INTRO');
+
+            if (p === 'LOBBY') {
+                document.getElementById('lobby').classList.remove('hidden'); document.getElementById('game-board').classList.add('hidden');
+                document.getElementById('role-container').classList.add('hidden');
+                document.getElementById('notepad').value = ''; 
+                for(let key in localStorage) { if(key.startsWith(`clue_${myId}`)) localStorage.removeItem(key); }
+                localStorage.removeItem('mafia_notepad_' + myId);
+                return; 
+            }
+
+            document.getElementById('lobby').classList.add('hidden'); document.getElementById('game-board').classList.remove('hidden');
+            if (!isHost) document.getElementById('role-container').classList.remove('hidden');
+            
+            if (p === 'INTRO') { document.getElementById('role-display-content').classList.remove('hidden'); document.getElementById('toggle-role-btn').innerText = '🙈 Hide Secret Role'; } 
+            else { document.getElementById('role-display-content').classList.add('hidden'); document.getElementById('toggle-role-btn').innerText = '👁️ Show Secret Role'; }
+
+            document.getElementById('intro-zone').classList.toggle('hidden', p !== 'INTRO');
+            document.getElementById('interrogation-zone').classList.toggle('hidden', p !== 'INTERROGATION');
+            document.getElementById('finale-zone').classList.toggle('hidden', p !== 'FINALE');
+
+            if (p !== 'DAY' && p !== 'DAY_VOTE') document.getElementById('day-zone').classList.add('hidden');
+            if (p !== 'NIGHT') { document.getElementById('action-zone').classList.add('hidden'); document.getElementById('mafia-zone').classList.add('hidden'); document.getElementById('night-timer-display').classList.add('hidden'); }
+        });
+
+        socket.on('narrator_event', (d) => {
+            const l = document.getElementById('narrator-log');
+            l.innerHTML += `<li>> ${d.msg}</li>`; l.scrollTop = l.scrollHeight;
+            if(isHost) synth.speak(new SpeechSynthesisUtterance(d.msg));
+        });
+
+        socket.on('start_intro_timer', (s) => startVisualTimer('intro-clock', s));
+        
+        socket.on('start_day_timer', (s) => {
+            document.getElementById('day-zone').classList.remove('hidden');
+            document.getElementById('day-vote-form').classList.add('hidden');
+            document.getElementById('ready-btn').classList.remove('hidden');
+            document.getElementById('ready-btn').innerText = "Ready to Vote (0/0)";
+            startVisualTimer('day-clock', s);
+        });
+
+        function emitReady() {
+            socket.emit('player_ready');
+            document.getElementById('ready-btn').innerText = "Waiting for others...";
+            document.getElementById('ready-btn').style.background = "#999";
+        }
+
+        socket.on('ready_count_update', (ready, total) => {
+            if(document.getElementById('ready-btn').innerText.includes("Ready")) {
+                document.getElementById('ready-btn').innerHTML = `Ready to Vote <span id="ready-count">(${ready}/${total})</span>`;
+            } else {
+                document.getElementById('ready-btn').innerHTML = `Waiting for others... <span id="ready-count">(${ready}/${total})</span>`;
+            }
+        });
+
+        socket.on('start_day_vote_timer', (s) => {
+            document.getElementById('day-zone').classList.remove('hidden');
+            document.getElementById('ready-btn').classList.add('hidden');
+            document.getElementById('ready-btn').style.background = "#2196F3"; // reset color
+            startVisualTimer('day-clock', s, "VOTING: ");
+        });
+
+        socket.on('prompt_day_vote', (list) => {
+            document.getElementById('day-zone').classList.remove('hidden'); document.getElementById('day-timer-display').classList.add('hidden'); document.getElementById('day-vote-form').classList.remove('hidden');
+            const t = document.getElementById('day-vote-targets'); t.innerHTML = `<button onclick="socket.emit('submit_day_vote', 'SKIP'); this.parentElement.innerHTML='Skipped';">Skip Vote</button>`;
+            list.forEach(p => { if(p.id !== myId) t.innerHTML += `<button onclick="socket.emit('submit_day_vote', '${p.id}'); this.parentElement.innerHTML='Locked';">${p.name}</button>`; });
+        });
+
+        socket.on('interrogation_update', (d) => {
+            const s = document.getElementById('interrogation-status'), t = document.getElementById('target-selection'), cl = document.getElementById('timer-display');
+            t.innerHTML = ''; cl.classList.add('hidden'); 
+            if (d.status !== 'GUESSING') document.getElementById('guess-form').classList.add('hidden');
+            
+            if(d.status === 'SELECTING_TARGET' && d.activePlayerId === myId) {
+                s.innerText = "Select your target:";
+                if (d.players) d.players.forEach(p => { if(p.id !== myId) t.innerHTML += `<button onclick="socket.emit('interrogate_target', '${p.id}')">${p.name}</button>`; });
+            } else if (d.status === 'TICKING') {
+                s.innerText = d.activePlayerName + " is questioning " + d.targetName;
+                startVisualTimer('clock', d.duration);
+            } else if (d.status === 'GUESSING') {
+                s.innerText = d.activePlayerName + " is locking in their official guess...";
+            }
+        });
+
+        socket.on('prompt_clue_guess', (d) => {
+            document.getElementById('guess-form').classList.remove('hidden');
+            const m = document.getElementById('guess-murderer'), l = document.getElementById('guess-location'), w = document.getElementById('guess-weapon');
+            m.innerHTML = '<option>Who?</option>'; d.playerList.forEach(p => m.innerHTML += `<option value="${p.id}">${p.name}</option>`);
+            l.innerHTML = '<option>Where?</option>'; d.locations.forEach(loc => l.innerHTML += `<option>${loc}</option>`);
+            w.innerHTML = '<option>With what?</option>'; d.weapons.forEach(wep => w.innerHTML += `<option>${wep}</option>`);
+        });
+
+        function submitGuess() {
+            const m = document.getElementById('guess-murderer').value, l = document.getElementById('guess-location').value, w = document.getElementById('guess-weapon').value;
+            if (m === 'Who?' || l === 'Where?' || w === 'With what?') return showToast("Please select all 3 clues!", "error");
+            socket.emit('submit_clue_guess', { murderer: m, location: l, weapon: w }); document.getElementById('guess-form').classList.add('hidden');
+        }
+
+        socket.on('night_action_phase', (d) => {
+            if(d.role === 'Mafia' && ['Mafia', 'Godfather', 'Framer', 'Voodoo Lady', 'Logic Jammer', 'Consigliere'].includes(myCoreRole)) {
+                // Team Mafia phase
+            } else if (d.role !== myCoreRole) return;
+            startVisualTimer('night-clock', d.time);
+            
+            if(d.role === 'Mafia') {
+                document.getElementById('mafia-zone').classList.remove('hidden');
+                const vt = document.getElementById('vote-targets'); vt.innerHTML = '';
+                d.players.forEach(p => { if(p.id !== myId) vt.innerHTML += `<button onclick="socket.emit('mafia_vote', '${p.id}'); this.parentElement.innerHTML='Locked';">${p.name}</button>`; });
+            } else {
+                document.getElementById('action-zone').classList.remove('hidden'); document.getElementById('action-title').innerText = "Select your target";
+                const at = document.getElementById('action-targets'); at.innerHTML = `<button onclick="socket.emit('submit_night_action', {role: '${d.role}', targetId: 'SKIP', targetItem: 'SKIP'}); document.getElementById('action-zone').classList.add('hidden');" style="background: #999; color: white;">Skip Action</button>`;
+
+                if (['Consigliere', 'Intelligence Agent'].includes(d.role)) {
+                    document.getElementById('action-title').innerText = "Pick an item to investigate:";
+                    d.weapons.forEach(w => at.innerHTML += `<button onclick="socket.emit('submit_night_action', {role:'${d.role}', targetItem:'${w}'}); document.getElementById('action-zone').classList.add('hidden');">🔍 ${w}</button>`);
+                    d.locations.forEach(loc => at.innerHTML += `<button onclick="socket.emit('submit_night_action', {role:'${d.role}', targetItem:'${loc}'}); document.getElementById('action-zone').classList.add('hidden');">📍 ${loc}</button>`);
+                } else {
+                    d.players.forEach(p => { if(d.role === 'Doctor' || p.id !== myId) at.innerHTML += `<button onclick="socket.emit('submit_night_action', {role: '${d.role}', targetId: '${p.id}'}); document.getElementById('action-zone').classList.add('hidden');">${p.name}</button>`; });
+                }
+            }
+        });
+
+        socket.on('close_night_action', () => { document.getElementById('action-zone').classList.add('hidden'); document.getElementById('mafia-zone').classList.add('hidden'); document.getElementById('night-timer-display').classList.add('hidden'); });
+        
+        socket.on('prompt_finale_guess', (d) => {
+            document.getElementById('finale-form').classList.remove('hidden'); document.getElementById('finale-status').classList.add('hidden');
+            const m = document.getElementById('finale-murderer'), l = document.getElementById('finale-location'), w = document.getElementById('finale-weapon');
+            m.innerHTML = '<option>Who?</option>'; d.playerList.forEach(p => m.innerHTML += `<option value="${p.id}">${p.name}</option>`);
+            l.innerHTML = '<option>Where?</option>'; d.locations.forEach(loc => l.innerHTML += `<option>${loc}</option>`);
+            w.innerHTML = '<option>With what?</option>'; d.weapons.forEach(wep => w.innerHTML += `<option>${wep}</option>`);
+        });
+
+        function submitFinale() {
+            const m = document.getElementById('finale-murderer').value, l = document.getElementById('finale-location').value, w = document.getElementById('finale-weapon').value;
+            if (m === 'Who?' || l === 'Where?' || w === 'With what?') return showToast("Please select all 3 clues!", "error");
+            socket.emit('submit_finale_guess', { murderer: m, location: l, weapon: w }); document.getElementById('finale-form').classList.add('hidden'); document.getElementById('finale-status').classList.remove('hidden');
+        }
+
+        function sendChat() { socket.emit('mafia_chat', document.getElementById('chat-input').value); document.getElementById('chat-input').value=''; }
+        socket.on('mafia_chat_update', (d) => { const b = document.getElementById('chat-box'); b.innerHTML += `<p><b>${d.sender}:</b> ${d.msg}</p>`; b.scrollTop = b.scrollHeight; });
+    </script>
+</body>
+</html>
