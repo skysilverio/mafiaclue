@@ -35,7 +35,7 @@ let currentInterrogatorId = null;
 let currentInterrogationState = {}; 
 
 let phaseEndTime = 0; 
-let phaseTimeoutId = null; // Master timeout for day/interrogation
+let phaseTimeoutId = null; 
 let nightTimerEndTime = 0; 
 
 let dayVotes = {};
@@ -257,22 +257,26 @@ io.on('connection', (socket) => {
         startIntroductionPhase();
     });
 
-    function startIntroductionPhase() {
+    async function startIntroductionPhase() {
         gameState = 'INTRO'; io.emit('phase_change', 'INTRO');
         narratorBroadcast("Welcome. Please look at your device now to memorize your secret role.", false);
-        phaseEndTime = Date.now() + 20000; io.emit('start_intro_timer', 20);
         
-        getAIStory(global.gameTheme, "The mystery begins. Briefly establish the setting based on the theme. End by telling everyone to close their eyes. Keep it to 2 or 3 sentences.")
-            .then(introStory => narratorBroadcast(introStory, false));
+        // Wait for AI story so timing doesn't overlap
+        const introStory = await getAIStory(global.gameTheme, "The mystery begins. Briefly establish the setting based on the theme. End by telling everyone to close their eyes. Keep it to 2 or 3 sentences.");
+        narratorBroadcast(introStory, false);
+        
+        phaseEndTime = Date.now() + 20000; 
+        io.emit('start_intro_timer', 20);
         
         phaseTimeoutId = setTimeout(() => {
             narratorBroadcast("Everyone, close your eyes. Mafia, open your eyes.", true);
-            phaseEndTime = Date.now() + 10000; io.emit('start_intro_timer', 10);
+            phaseEndTime = Date.now() + 15000; // Extended to 15 seconds
+            io.emit('start_intro_timer', 15);
             
             phaseTimeoutId = setTimeout(() => {
                 narratorBroadcast("Mafia, close your eyes. Everyone, open your eyes.", false);
-                phaseTimeoutId = setTimeout(startInterrogationPhase, 3000);
-            }, 10000);
+                phaseTimeoutId = setTimeout(startInterrogationPhase, 4000);
+            }, 15000);
         }, 20000);
     }
 
@@ -313,13 +317,29 @@ io.on('connection', (socket) => {
     socket.on('submit_clue_guess', (guess) => {
         const player = getPlayerBySocket(socket.id);
         if (!player || player.id !== currentInterrogatorId) return;
-        let score = (guess.murderer === trueMurderer ? 1 : 0) + (guess.weapon === trueWeapon ? 1 : 0) + (guess.location === trueLocation ? 1 : 0);
-        let symbol = score === 3 ? '🟢' : (score > 0 ? '⚠️' : '❌');
         
-        if (jammedPlayers.has(player.id)) { symbol = "🌀 JAMMED"; jammedPlayers.delete(player.id); }
+        let actualScore = (guess.murderer === trueMurderer ? 1 : 0) + (guess.weapon === trueWeapon ? 1 : 0) + (guess.location === trueLocation ? 1 : 0);
+        let reportedScore = actualScore;
 
-        io.to(player.socketId).emit('toast_msg', { text: `Result: ${symbol}`, type: score===3?'success':'warning', notepadText: `\n[Guess] ${players[guess.murderer]?.name}, ${guess.location}, ${guess.weapon} -> ${symbol}` });
-        if (score === 3 && symbol !== "🌀 JAMMED") narratorBroadcast(`Wait! An incredible deduction has been made! Someone correctly guessed all three pieces of the puzzle!`, false);
+        // LOGIC JAMMER DECEPTION
+        if (jammedPlayers.has(player.id)) { 
+            let fakeScores = [0, 1, 2, 3].filter(s => s !== actualScore);
+            reportedScore = fakeScores[Math.floor(Math.random() * fakeScores.length)];
+            jammedPlayers.delete(player.id); 
+        }
+
+        let symbol = reportedScore === 3 ? '🟢' : (reportedScore > 0 ? '⚠️' : '❌');
+
+        io.to(player.socketId).emit('toast_msg', { 
+            text: `Result: ${symbol}`, 
+            type: reportedScore === 3 ? 'success' : 'warning', 
+            notepadText: `\n[Guess] ${players[guess.murderer]?.name}, ${guess.location}, ${guess.weapon} -> ${symbol}`,
+            guess: guess,
+            score: reportedScore,
+            symbol: symbol
+        });
+        
+        if (reportedScore === 3) narratorBroadcast(`Wait! An incredible deduction has been made! Someone correctly guessed all three pieces of the puzzle!`, false);
         phaseTimeoutId = setTimeout(nextInterrogationTurn, 3000); 
     });
 
@@ -532,10 +552,11 @@ io.on('connection', (socket) => {
 
         narratorBroadcast("Morning comes. Everyone, open your eyes.", false);
         
-        getAIStory(global.gameTheme, diedTonight.length === 0 ? "The night was unusually still and quiet. No one was harmed." : `The group wakes to find ${diedTonight.map(id => players[id].name).join(' and ')} eliminated.`)
-            .then(story => narratorBroadcast(story, false));
+        // Wait for AI story so timing doesn't overlap
+        const story = await getAIStory(global.gameTheme, diedTonight.length === 0 ? "The night was unusually still and quiet. No one was harmed." : `The group wakes to find ${diedTonight.map(id => players[id].name).join(' and ')} eliminated.`);
+        narratorBroadcast(story, false);
         
-        setTimeout(() => {
+        phaseTimeoutId = setTimeout(() => {
             diedTonight.forEach(id => { players[id].isAlive = false; });
             broadcastGraveyard();
             roundNumber++;
