@@ -143,9 +143,12 @@
         </div>
 
         <div id="reference-board" class="hidden player-only">
-            <div><h4 style="margin:0; color:#ffaa00;">Suspects</h4><div id="ref-players" class="clue-category"></div></div>
-            <div><h4 style="margin:0; color:#ffaa00;">Locations</h4><div id="ref-locations" class="clue-category"></div></div>
-            <div><h4 style="margin:0; color:#ffaa00;">Weapons</h4><div id="ref-weapons" class="clue-category"></div></div>
+            <div style="font-size: 11px; color: #aaa; text-align: center; margin-bottom: 10px; width: 100%;">
+                <b>Legend:</b> ❓ Unknown | ❌ Eliminated | ⚠️ Partial Match | ✅ Confirmed
+            </div>
+            <div style="width: 100%;"><h4 style="margin:0; color:#ffaa00;">Suspects</h4><div id="ref-players" class="clue-category"></div></div>
+            <div style="width: 100%;"><h4 style="margin:0; color:#ffaa00;">Locations</h4><div id="ref-locations" class="clue-category"></div></div>
+            <div style="width: 100%;"><h4 style="margin:0; color:#ffaa00;">Weapons</h4><div id="ref-weapons" class="clue-category"></div></div>
             <textarea id="notepad" placeholder="Extra Detective Notes..." style="height:60px; width: 100%; margin: 10px 0 0 0;"></textarea>
         </div>
 
@@ -202,7 +205,7 @@
         <h2 style="margin-top:0;">📖 HOW TO PLAY</h2>
         <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
             <p style="margin-top:0;"><b>The Goal:</b> The Town must deduce the exact details of the crime (Who, Where, What) or execute all Mafia. The Mafia must eliminate the Town.</p>
-            <p><b>1. Interrogation:</b> Players take turns guessing the crime. The server grades it: 🟢 (All 3 correct), ⚠️ (1 or 2 correct), ❌ (None correct), 🌀 (Jammed).</p>
+            <p><b>1. Interrogation:</b> Players take turns guessing the crime. The server grades it: 🟢 (All 3 correct), ⚠️ (1 or 2 correct), ❌ (None correct).</p>
             <p><b>2. Town Hall:</b> Discuss clues and vote to execute a suspect.</p>
             <p><b>3. Night:</b> Mafia secretly chats and eliminates. Special roles wake up to use abilities.</p>
             <p style="margin-bottom:0;"><b>4. Finale:</b> If the final round is reached, players simultaneously lock in a final accusation.</p>
@@ -238,6 +241,29 @@
                 np.value += d.notepadText; 
                 localStorage.setItem('mafia_notepad_' + myId, np.value);
             }
+            
+            // Auto-update interactive board if this toast contains guess data
+            if(d.guess) {
+                const pName = document.querySelector(`select#guess-murderer option[value="${d.guess.murderer}"]`).text;
+                const names = [pName, d.guess.location, d.guess.weapon];
+                
+                names.forEach(name => {
+                    let currentState = parseInt(localStorage.getItem(`clue_${myId}_${name}`) || 0);
+                    let newState = currentState;
+                    
+                    if (d.score === 3) newState = 3; // ✅ Confirmed
+                    else if (d.score === 0) newState = 1; // ❌ Eliminated
+                    else if (d.score > 0 && currentState === 0) newState = 2; // ⚠️ Partial (only updates if currently unknown)
+
+                    localStorage.setItem(`clue_${myId}_${name}`, newState);
+                    
+                    const btn = document.querySelector(`.clue-btn[data-name="${name}"]`);
+                    if (btn) {
+                        btn.className = `clue-btn state-${newState}`;
+                        btn.querySelector('.icon').innerText = newState == 1 ? '❌' : (newState == 2 ? '⚠️' : (newState == 3 ? '✅' : '❓'));
+                    }
+                });
+            }
         });
 
         // UI Toggles
@@ -264,6 +290,7 @@
                 
                 const btn = document.createElement('button');
                 btn.className = `clue-btn state-${savedState}`;
+                btn.setAttribute('data-name', name);
                 btn.innerHTML = `<span class="${deadClass}">${name}${roleTag}</span> <span class="icon">${savedState == 1 ? '❌' : (savedState == 2 ? '⚠️' : (savedState == 3 ? '✅' : '❓'))}</span>`;
                 
                 btn.onclick = function() {
