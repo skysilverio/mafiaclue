@@ -52,6 +52,7 @@ let currentNightRole = null;
 let nightTimerTimeout = null; 
 let expectedNightSubmissions = 0;
 let currentNightSubmissions = 0;
+let nightTurnActive = false; // IRONCLAD LOCK FOR ASYNC RACE CONDITIONS
 
 // Helpers
 function shuffle(array) {
@@ -64,11 +65,11 @@ function shuffle(array) {
 function getPlayerBySocket(sockId) { return Object.values(players).find(p => p.socketId === sockId); }
 function narratorBroadcast(message, isNight = false) { io.emit('narrator_event', { msg: message, isNight }); }
 
-// NEW: Dynamic TTS Syncing Function
+// Dynamic TTS Syncing Function
 function calculateTTSDuration(text) {
     const wordCount = text.split(/\s+/).length;
-    const wordsPerSecond = 2.5; // Approx 150 WPM
-    return Math.ceil((wordCount / wordsPerSecond) * 1000) + 1500; // Adds a 1.5-second natural pause buffer
+    const wordsPerSecond = 2.5; 
+    return Math.ceil((wordCount / wordsPerSecond) * 1000) + 1500; 
 }
 
 async function narratorBroadcastAndWait(message, isNight = false) {
@@ -208,6 +209,8 @@ io.on('connection', (socket) => {
         else if(gameState === 'DAY_VOTE') tallyDayVotes();
         else if(gameState === 'INTERROGATION') nextInterrogationTurn();
         else if(gameState === 'NIGHT') {
+            if (!nightTurnActive) return;
+            nightTurnActive = false;
             (async () => {
                 await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
                 processNextNightTurn();
@@ -272,7 +275,6 @@ io.on('connection', (socket) => {
         startIntroductionPhase();
     });
 
-    // FULLY SYNCHRONIZED INTRO
     async function startIntroductionPhase() {
         gameState = 'INTRO'; io.emit('phase_change', 'INTRO');
         await narratorBroadcastAndWait("Welcome. Please look at your device now to memorize your secret role.", false);
@@ -285,7 +287,7 @@ io.on('connection', (socket) => {
         
         phaseTimeoutId = setTimeout(async () => {
             await narratorBroadcastAndWait("Everyone, close your eyes. Mafia, open your eyes.", true);
-            phaseEndTime = Date.now() + 15000; // 15 Second Mafia meeting
+            phaseEndTime = Date.now() + 15000; 
             io.emit('start_intro_timer', 15);
             
             phaseTimeoutId = setTimeout(async () => {
@@ -335,6 +337,10 @@ io.on('connection', (socket) => {
         const player = getPlayerBySocket(socket.id);
         if (!player || player.id !== currentInterrogatorId) return;
         
+        // LOCK: Prevent double-clicking from spawning multiple day phases
+        if (currentInterrogationState.status !== 'GUESSING') return; 
+        currentInterrogationState.status = 'RESOLVING';
+
         let actualScore = (guess.murderer === trueMurderer ? 1 : 0) + (guess.weapon === trueWeapon ? 1 : 0) + (guess.location === trueLocation ? 1 : 0);
         let reportedScore = actualScore;
 
@@ -359,7 +365,7 @@ io.on('connection', (socket) => {
         if (reportedScore === 3) {
             await narratorBroadcastAndWait(`Wait! An incredible deduction has been made! Someone correctly guessed all three pieces of the puzzle!`, false);
         } else {
-            await new Promise(res => setTimeout(res, 2000)); // Short natural pause
+            await new Promise(res => setTimeout(res, 2000)); 
         }
         nextInterrogationTurn(); 
     });
@@ -403,6 +409,10 @@ io.on('connection', (socket) => {
     }
 
     async function tallyDayVotes() {
+        // LOCK: Prevent vote-changing at 0 seconds from triggering duplicate executions
+        if (gameState !== 'DAY_VOTE') return;
+        gameState = 'TALLYING'; 
+
         let counts = {}; let curseTriggered = false;
 
         if (activeVoodooCurse && players[activeVoodooCurse] && players[activeVoodooCurse].isAlive && dayVotes[activeVoodooCurse]) {
@@ -440,13 +450,13 @@ io.on('connection', (socket) => {
             }
         }
         broadcastGraveyard();
-        startNightPhase(); // Start night smoothly without arbitrary timeout
+        startNightPhase(); 
     }
 
     // --- DYNAMIC NIGHT SEQUENCER ---
     async function startNightPhase() {
         gameState = 'NIGHT'; jammedPlayers.clear();
-        nightActions = { mafiaVotes: {}, doctorTarget: null, detectiveTarget: null, framerTarget: null, voodooTarget: null, socialiteTarget: null, vigilanteTarget: null, jammerTarget: null };
+        nightActions = { mafiaVotes: {}, doctorTarget: null, detectiveTarget: null, framerTarget: null, voodooTarget: null, socialiteTarget: null, vigilanteTarget: null, jammerTarget: null, submissions: new Set() };
         io.emit('phase_change', 'NIGHT');
         await narratorBroadcastAndWait("Night falls. Everyone, close your eyes.", true);
         
@@ -473,13 +483,15 @@ io.on('connection', (socket) => {
         currentNightRole = nightSequence.shift();
         let rolePlayers = Object.values(players).filter(p => currentNightRole === 'Mafia' ? isMafiaTeam(p.role) : p.role === currentNightRole);
         let livingRolePlayers = rolePlayers.filter(p => p.isAlive);
+        
+        nightActions.submissions = new Set(); // Reset submissions for this role
         expectedNightSubmissions = livingRolePlayers.length;
         currentNightSubmissions = 0;
+        nightTurnActive = true; // LOCK ENABLED
 
         let time = expectedNightSubmissions > 0 ? 30 : Math.floor(Math.random() * 6) + 5;
         let msg = currentNightRole === 'Mafia' ? "Mafia, open your eyes and select a victim." : `${currentNightRole}, open your eyes.`;
         
-        // Wait for narrator to say the line BEFORE starting the timer
         await narratorBroadcastAndWait(msg, true);
         
         nightTimerEndTime = Date.now() + (time * 1000);
@@ -491,8 +503,11 @@ io.on('connection', (socket) => {
         });
         
         nightTimerTimeout = setTimeout(async () => {
+            if (!nightTurnActive) return; 
+            nightTurnActive = false; 
+            
             await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
-            await new Promise(res => setTimeout(res, 1000)); // Natural 1-second pause
+            await new Promise(res => setTimeout(res, 1000));
             processNextNightTurn();
         }, time * 1000);
     }
@@ -500,6 +515,10 @@ io.on('connection', (socket) => {
     socket.on('submit_night_action', (data) => {
         const p = getPlayerBySocket(socket.id);
         if (!p || !p.isAlive) return;
+        
+        // Prevent double-counting submissions
+        if (nightActions.submissions.has(p.id)) return;
+        nightActions.submissions.add(p.id);
 
         if (data.role === 'Socialite' && p.role === 'Socialite' && data.targetId !== 'SKIP') nightActions.socialiteTarget = data.targetId;
         if (data.role === 'Logic Jammer' && p.role === 'Logic Jammer' && data.targetId !== 'SKIP') nightActions.jammerTarget = data.targetId;
@@ -527,10 +546,16 @@ io.on('connection', (socket) => {
             vigilanteBullets[p.id] = 0; 
         }
 
-        currentNightSubmissions++;
+        currentNightSubmissions = nightActions.submissions.size;
         if(currentNightSubmissions >= expectedNightSubmissions && expectedNightSubmissions > 0) {
+            if (!nightTurnActive) return; // Safety check
+            nightTurnActive = false; // Lock out parallel timelines
             clearTimeout(nightTimerTimeout);
+            
             (async () => {
+                // 4 SECOND HARD PAUSE TO READ RESULTS
+                await new Promise(res => setTimeout(res, 4000));
+                
                 await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
                 await new Promise(res => setTimeout(res, 1000));
                 processNextNightTurn();
@@ -545,9 +570,15 @@ io.on('connection', (socket) => {
             if (Object.keys(nightActions.mafiaVotes).length === expectedNightSubmissions) {
                 const targets = [...new Set(Object.values(nightActions.mafiaVotes))];
                 if (targets.length === 1) {
+                    if (!nightTurnActive) return; 
+                    nightTurnActive = false; 
+                    
                     nightActions.lockedMafiaTarget = targets[0];
                     clearTimeout(nightTimerTimeout);
                     (async () => {
+                        // 4 SECOND HARD PAUSE FOR CONSISTENCY
+                        await new Promise(res => setTimeout(res, 4000));
+                        
                         await narratorBroadcastAndWait("Mafia, close your eyes.", true);
                         await new Promise(res => setTimeout(res, 1000));
                         processNextNightTurn();
@@ -583,7 +614,6 @@ io.on('connection', (socket) => {
 
         await narratorBroadcastAndWait("Morning comes. Everyone, open your eyes.", false);
         
-        // Wait for AI story so timing doesn't overlap
         const story = await getAIStory(global.gameTheme, diedTonight.length === 0 ? "The night was unusually still and quiet. No one was harmed." : `The group wakes to find ${diedTonight.map(id => players[id].name).join(' and ')} eliminated.`);
         await narratorBroadcastAndWait(story, false);
         
@@ -606,12 +636,16 @@ io.on('connection', (socket) => {
         if (gameState === 'FINALE' && p?.isAlive) {
             finaleGuesses[p.id] = guess;
             if (Object.keys(finaleGuesses).length === Object.values(players).filter(p => p.isAlive).length) {
+                
+                gameState = 'GAME_OVER'; 
+                io.emit('phase_change', 'GAME_OVER');
+                
                 let vWon = false;
                 for (const [pId, g] of Object.entries(finaleGuesses)) {
                     if (!isMafiaTeam(players[pId].role) && g.murderer === trueMurderer && g.weapon === trueWeapon && g.location === trueLocation) vWon = true;
                 }
                 const truth = `${players[trueMurderer].name} in the ${trueLocation} with the ${trueWeapon}`;
-                gameState = 'GAME_OVER'; io.emit('phase_change', 'GAME_OVER');
+                
                 await narratorBroadcastAndWait(vWon ? `🟢 VILLAGERS WIN! Truth: ${truth}` : `❌ MAFIA WINS! Truth: ${truth}`, false);
             }
         }
@@ -620,6 +654,7 @@ io.on('connection', (socket) => {
     socket.on('reset_game', () => {
         if (socket.id === hostSocketId) {
             gameState = 'LOBBY'; roundNumber = 0; interrogationQueue = []; dayVotes = {}; finaleGuesses = {}; nightActions = {}; nightSequence = []; currentNightRole = null; activeVoodooCurse = null; jammedPlayers.clear(); currentInterrogationState = {};
+            nightTurnActive = false;
             clearTimeout(phaseTimeoutId); clearTimeout(nightTimerTimeout);
             Object.values(players).forEach(p => { p.isAlive = true; p.role = null; });
             io.emit('phase_change', 'LOBBY'); io.emit('update_players', Object.values(players));
