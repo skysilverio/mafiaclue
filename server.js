@@ -129,8 +129,12 @@ io.on('connection', (socket) => {
             player.socketId = socket.id; 
             if (isMafiaTeam(player.role)) socket.join('mafia_room');
             
+            // FIX (Bug #5): Only append Murderer/Accomplice tag for the base 'Mafia' role,
+            // not for named mafia roles like Godfather, Framer, etc.
             let displayRole = player.role;
-            if (isMafiaTeam(player.role)) displayRole = `${player.role} (${player.id === trueMurderer ? 'Mafia Murderer' : 'Mafia Accomplice'})`; 
+            if (player.role === 'Mafia') {
+                displayRole = player.id === trueMurderer ? 'Mafia Murderer' : 'Mafia Accomplice';
+            }
             
             io.to(socket.id).emit('rejoin_success', player);
             io.to(socket.id).emit('phase_change', gameState);
@@ -264,8 +268,11 @@ io.on('connection', (socket) => {
 
         playerIds.forEach(id => {
             let p = players[id];
+            // FIX (Bug #5): Only tag base 'Mafia' role, not named roles like Godfather/Framer
             let displayRole = p.role;
-            if (isMafiaTeam(p.role)) displayRole = `${p.role} (${p.id === trueMurderer ? 'Mafia Murderer' : 'Mafia Accomplice'})`;
+            if (p.role === 'Mafia') {
+                displayRole = p.id === trueMurderer ? 'Mafia Murderer' : 'Mafia Accomplice';
+            }
             io.to(p.socketId).emit('role_assigned', { displayRole: displayRole, coreRole: p.role, playerList: Object.values(players), weapons: activeWeapons, locations: activeLocations });
         });
 
@@ -415,8 +422,19 @@ io.on('connection', (socket) => {
 
         let counts = {}; let curseTriggered = false;
 
-        if (activeVoodooCurse && players[activeVoodooCurse] && players[activeVoodooCurse].isAlive && dayVotes[activeVoodooCurse]) {
-            counts[dayVotes[activeVoodooCurse]] = 999; curseTriggered = true;
+        // FIX (Bug #4): Explicitly handle Voodoo curse when cursed player votes SKIP.
+        // Previously, an undefined vote silently fell through and the curse did nothing.
+        if (activeVoodooCurse && players[activeVoodooCurse] && players[activeVoodooCurse].isAlive) {
+            const cursedVote = dayVotes[activeVoodooCurse];
+            if (!cursedVote || cursedVote === 'SKIP') {
+                // Cursed player skipped — curse holds but no execution happens
+                await narratorBroadcastAndWait("A dark curse takes hold... but the cursed soul stays silent. No execution today.", false);
+                activeVoodooCurse = null;
+                broadcastGraveyard();
+                return startNightPhase();
+            }
+            counts[cursedVote] = 999;
+            curseTriggered = true;
             await narratorBroadcastAndWait("A dark curse takes hold! All voices are silenced except one...", false);
         } else {
             Object.entries(dayVotes).forEach(([pId, target]) => {
@@ -456,7 +474,19 @@ io.on('connection', (socket) => {
     // --- DYNAMIC NIGHT SEQUENCER ---
     async function startNightPhase() {
         gameState = 'NIGHT'; jammedPlayers.clear();
-        nightActions = { mafiaVotes: {}, doctorTarget: null, detectiveTarget: null, framerTarget: null, voodooTarget: null, socialiteTarget: null, vigilanteTarget: null, jammerTarget: null, submissions: new Set() };
+        nightActions = {
+            mafiaVotes: {},
+            doctorTarget: null,
+            detectiveTarget: null,
+            detectiveSocketId: null,  // FIX (Bug #3): Store socket to send deferred result
+            detectivePlayerId: null,  // FIX (Bug #3): Store player ID to check socialite block
+            framerTarget: null,
+            voodooTarget: null,
+            socialiteTarget: null,
+            vigilanteTarget: null,
+            jammerTarget: null,
+            submissions: new Set()
+        };
         io.emit('phase_change', 'NIGHT');
         await narratorBroadcastAndWait("Night falls. Everyone, close your eyes.", true);
         
@@ -531,14 +561,13 @@ io.on('connection', (socket) => {
             io.to(socket.id).emit('toast_msg', { text: isCorrect ? '✅ Intel: TRUE' : '❌ Intel: FALSE', type: isCorrect?'success':'error', notepadText: `\n[NIGHT] The ${data.targetItem} is ${isCorrect ? 'part of the crime' : 'not involved'}.` });
         }
         
+        // FIX (Bug #3): Store Detective target and socket instead of sending result immediately.
+        // The result is now deferred to resolveNight() so that Socialite/Framer blocks
+        // are fully resolved before the Detective learns anything.
         if (data.role === 'Detective' && p.role === 'Detective' && data.targetId !== 'SKIP') {
             nightActions.detectiveTarget = data.targetId;
-            if (nightActions.socialiteTarget !== p.id) {
-                let isEvil = isMafiaTeam(players[data.targetId].role);
-                if (players[data.targetId].role === 'Godfather') isEvil = false;
-                if (nightActions.framerTarget === data.targetId) isEvil = true;
-                io.to(socket.id).emit('toast_msg', { text: `Scan: ${players[data.targetId].name} is ${isEvil ? 'Mafia' : 'Innocent'}!`, type: isEvil?'error':'success' });
-            }
+            nightActions.detectiveSocketId = socket.id;
+            nightActions.detectivePlayerId = p.id;
         }
         
         if (data.role === 'Vigilante' && p.role === 'Vigilante') {
@@ -595,13 +624,40 @@ io.on('connection', (socket) => {
 
         const blockedId = nightActions.socialiteTarget;
         if (blockedId && players[blockedId]) {
-            if (blockedId === trueMurderer) nightActions.lockedMafiaTarget = null;
+            // FIX (Bug #1): Cancel the mafia kill if ANY mafia team member is blocked,
+            // not just the trueMurderer. The kill is a team consensus — any blocked
+            // mafia member should disrupt it.
+            if (isMafiaTeam(players[blockedId].role)) nightActions.lockedMafiaTarget = null;
+
             if (players[blockedId].role === 'Doctor') nightActions.doctorTarget = null;
             if (players[blockedId].role === 'Framer') nightActions.framerTarget = null;
-            if (players[blockedId].role === 'Logic Jammer') jammedPlayers.delete(blockedId);
+
+            // FIX (Bug #2): Delete the jammer's TARGET from jammedPlayers, not the jammer's own ID.
+            // jammedPlayers stores target IDs, so we must remove nightActions.jammerTarget.
+            if (players[blockedId].role === 'Logic Jammer') jammedPlayers.delete(nightActions.jammerTarget);
+
             if (players[blockedId].role === 'Voodoo Lady') nightActions.voodooTarget = null;
             if (players[blockedId].role === 'Vigilante') nightActions.vigilanteTarget = null;
             io.to(players[blockedId].socketId).emit('toast_msg', { text: '🍸 Distracted!', type:'warning', notepadText: `\n[NIGHT] You were distracted by the Socialite! Your night action failed.` });
+        }
+
+        // FIX (Bug #3): Send Detective result here, AFTER all blocks are resolved.
+        // This ensures Framer nullification and Socialite distraction are applied
+        // before the Detective learns anything.
+        if (nightActions.detectiveTarget && nightActions.detectiveSocketId) {
+            const detTarget = nightActions.detectiveTarget;
+            // Only send result if Detective was not themselves distracted by Socialite
+            if (nightActions.socialiteTarget !== nightActions.detectivePlayerId) {
+                let isEvil = isMafiaTeam(players[detTarget].role);
+                if (players[detTarget].role === 'Godfather') isEvil = false;
+                // framerTarget is already null here if the Framer was blocked by Socialite
+                if (nightActions.framerTarget === detTarget) isEvil = true;
+                io.to(nightActions.detectiveSocketId).emit('toast_msg', {
+                    text: `Scan: ${players[detTarget].name} is ${isEvil ? 'Mafia' : 'Innocent'}!`,
+                    type: isEvil ? 'error' : 'success',
+                    notepadText: `\n[NIGHT] ${players[detTarget].name} scanned as ${isEvil ? 'Mafia' : 'Innocent'}.`
+                });
+            }
         }
 
         activeVoodooCurse = nightActions.voodooTarget;
@@ -637,6 +693,7 @@ io.on('connection', (socket) => {
             finaleGuesses[p.id] = guess;
             if (Object.keys(finaleGuesses).length === Object.values(players).filter(p => p.isAlive).length) {
                 
+                // Final Lock to prevent multiple end-game triggers
                 gameState = 'GAME_OVER'; 
                 io.emit('phase_change', 'GAME_OVER');
                 
