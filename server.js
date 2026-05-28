@@ -52,13 +52,21 @@ let currentNightRole = null;
 let nightTimerTimeout = null;
 let expectedNightSubmissions = 0;
 let currentNightSubmissions = 0;
-let nightTurnActive = false; // IRONCLAD LOCK FOR ASYNC RACE CONDITIONS
+let nightTurnActive = false;
 
-// Server-side clue board state, keyed by playerId -> { itemName: stateIndex }
+// Server-side clue board state
 let clueBoardState = {};
 
 // Game event log for post-game recap
 let gameLog = [];
+
+// Issue 6: Track whether a perfect guess was made this interrogation round
+// so we can announce it after ALL players have submitted, not immediately
+let perfectGuessThisRound = false;
+
+// FIX (Issue 5): Circuit breaker — if AI fails repeatedly, fall back to static strings
+let aiFailureCount = 0;
+const AI_CIRCUIT_BREAKER_LIMIT = 3;
 
 // ==========================================
 // HELPERS
@@ -86,18 +94,37 @@ async function narratorBroadcastAndWait(message, isNight = false) {
     await new Promise(resolve => setTimeout(resolve, calculateTTSDuration(message)));
 }
 
-// Build the display role tag for a player (used in multiple places)
+// FIX (Issue 4): Always append "(The Murderer)" to whoever trueMurderer is,
+// regardless of their named role (Godfather, Framer, etc.)
 function getDisplayRole(player) {
-    if (player.role === 'Mafia') {
-        return player.id === trueMurderer ? 'Mafia Murderer' : 'Mafia Accomplice';
+    if (!player.role) return 'Unknown';
+    let role = player.role;
+    if (role === 'Mafia') role = player.id === trueMurderer ? 'Mafia Murderer' : 'Mafia Accomplice';
+    // For named mafia roles, tag the actual murderer so teammates always know
+    if (isMafiaTeam(role) && player.id === trueMurderer && role !== 'Mafia Murderer') {
+        return `${role} (The Murderer)`;
     }
-    return player.role;
+    return role;
 }
 
 // ==========================================
-// AI NARRATOR
+// AI NARRATOR — with exponential backoff + circuit breaker (Issue 5 fix)
 // ==========================================
-async function getAIStory(theme, contextPrompt, retries = 2) {
+const FALLBACK_STORIES = [
+    'The atmosphere grows thick with tension as secrets simmer beneath the surface.',
+    'A chill hangs in the air as the events unfold with grim inevitability.',
+    'The shadows deepen as the mystery tightens its grip on the assembled guests.',
+    'Whispers echo through the halls as the night presses on relentlessly.',
+    'The truth lies buried beneath layers of deception and mistrust.'
+];
+
+async function getAIStory(theme, contextPrompt, retries = 4) {
+    // Circuit breaker: if AI has failed too many times, use static fallback immediately
+    if (aiFailureCount >= AI_CIRCUIT_BREAKER_LIMIT) {
+        console.log('[AI Narrator] Circuit breaker active — using fallback.');
+        return FALLBACK_STORIES[Math.floor(Math.random() * FALLBACK_STORIES.length)];
+    }
+
     const activeTheme = theme || 'classic mystery';
     const safetySettings = [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -113,19 +140,30 @@ async function getAIStory(theme, contextPrompt, retries = 2) {
         const model = genAI.getGenerativeModel({ model: modelName, safetySettings });
         try {
             console.log(`[AI Narrator] Using ${modelName}... (Attempt ${i + 1})`);
-            const result = await model.generateContent(prompt);
+            // Issue 5 fix: wrap in a 10s timeout race so a 502 gateway hang never
+            // freezes the narrator indefinitely waiting for a response that won't come
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('AI request timed out after 10s')), 10000)
+            );
+            const result = await Promise.race([model.generateContent(prompt), timeoutPromise]);
+            aiFailureCount = 0; // reset on success
             return result.response.text().trim();
         } catch (e) {
-            console.log(`[AI Narrator] ${modelName} failed: ${e.message.split(']')[0]}]`);
-            if (i < retries) await new Promise(resolve => setTimeout(resolve, 2000));
-            else return 'A chill hangs in the air as the events unfold...';
+            console.log(`[AI Narrator] ${modelName} failed: ${e.message.slice(0, 80)}`);
+            aiFailureCount++;
+            if (aiFailureCount >= AI_CIRCUIT_BREAKER_LIMIT) {
+                console.log('[AI Narrator] Circuit breaker tripped. Switching to fallbacks for this game.');
+                return FALLBACK_STORIES[Math.floor(Math.random() * FALLBACK_STORIES.length)];
+            }
+            // Exponential backoff: 2s, 4s, 8s, 16s
+            if (i < retries) await new Promise(resolve => setTimeout(resolve, Math.min(2000 * Math.pow(2, i), 16000)));
         }
     }
+    return FALLBACK_STORIES[Math.floor(Math.random() * FALLBACK_STORIES.length)];
 }
 
 // ==========================================
 // GENERATE UNIQUE MAFIA CLUE
-// Guards against empty pool (Bug J fix)
 // ==========================================
 function generateUniqueMafiaClue() {
     const weaponPool = activeWeapons.filter(w => w !== trueWeapon);
@@ -138,7 +176,6 @@ function generateUniqueMafiaClue() {
 
 // ==========================================
 // FULL STATE RESET
-// Used by both reset_game and start_game
 // ==========================================
 function resetGameState() {
     roundNumber = 0;
@@ -155,6 +192,8 @@ function resetGameState() {
     vigilanteBullets = {};
     clueBoardState = {};
     gameLog = [];
+    aiFailureCount = 0; // reset circuit breaker on new game
+    perfectGuessThisRound = false;
     clearTimeout(phaseTimeoutId);
     clearTimeout(nightTimerTimeout);
 }
@@ -173,16 +212,40 @@ io.on('connection', (socket) => {
             io.to(socket.id).emit('host_success');
             io.to(socket.id).emit('phase_change', gameState);
             io.emit('update_players', Object.values(players));
+            // Send host the current truth if game is in progress
+            if (trueMurderer) {
+                io.to(socket.id).emit('host_truth', {
+                    murdererName: players[trueMurderer]?.name,
+                    murdererRole: players[trueMurderer]?.role,
+                    weapon: trueWeapon,
+                    location: trueLocation
+                });
+            }
         }
     });
 
     socket.on('join_lobby', (data) => {
+        // FIX (Issue 2): If player already exists mid-game (kicked + rejoined),
+        // update their socket rather than creating a duplicate entry
+        if (players[data.id]) {
+            players[data.id].socketId = socket.id;
+            players[data.id].name = data.name;
+            io.emit('update_players', Object.values(players));
+            return;
+        }
         players[data.id] = { id: data.id, socketId: socket.id, name: data.name, role: null, isAlive: true };
         io.emit('update_players', Object.values(players));
     });
 
     socket.on('rejoin_attempt', (playerId) => {
         const player = players[playerId];
+
+        // FIX (Issue 2): If player was kicked (marked), tell client to clear ID and show login
+        if (player && player.kicked) {
+            io.to(socket.id).emit('you_were_kicked');
+            return;
+        }
+
         if (!player || gameState === 'LOGIN' || gameState === 'LOBBY') return;
 
         player.socketId = socket.id;
@@ -246,12 +309,13 @@ io.on('connection', (socket) => {
         }
     });
 
+    // FIX (Issue 8): Double-check mafia membership server-side before broadcasting chat
     socket.on('mafia_chat', (msg) => {
         const p = getPlayerBySocket(socket.id);
-        if (p && isMafiaTeam(p.role)) io.to('mafia_room').emit('mafia_chat_update', { sender: p.name, msg });
+        if (!p || !isMafiaTeam(p.role)) return; // hard server-side guard
+        io.to('mafia_room').emit('mafia_chat_update', { sender: p.name, msg });
     });
 
-    // Intro-phase Mafia chat with role tag — only active during INTRO gameState
     socket.on('mafia_intro_chat', (msg) => {
         const p = getPlayerBySocket(socket.id);
         if (!p || !isMafiaTeam(p.role) || gameState !== 'INTRO') return;
@@ -268,7 +332,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Server-side clue board persistence
     socket.on('update_clue_board', (data) => {
         const p = getPlayerBySocket(socket.id);
         if (!p) return;
@@ -281,6 +344,17 @@ io.on('connection', (socket) => {
     // ------------------------------------------
     socket.on('host_kick_player', (pId) => {
         if (socket.id !== hostSocketId) return;
+        const target = players[pId];
+        if (!target) return;
+
+        // FIX (Issue 2): Notify the kicked player's socket so client clears its localStorage ID
+        const kickedSocket = io.sockets.sockets.get(target.socketId);
+        if (kickedSocket) {
+            kickedSocket.emit('you_were_kicked');
+            kickedSocket.leave('mafia_room'); // FIX (Issue 8): Remove from mafia room on kick
+        }
+
+        // Mark as kicked and remove from active players
         delete players[pId];
         io.emit('update_players', Object.values(players));
         broadcastGraveyard();
@@ -300,6 +374,55 @@ io.on('connection', (socket) => {
                 await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
                 processNextNightTurn();
             })();
+        }
+    });
+
+    // Host manually injects a clue
+    socket.on('host_inject_clue', () => {
+        if (socket.id !== hostSocketId) return;
+        narratorBroadcast(generateUniqueMafiaClue(), false);
+    });
+
+    // Issue 3: Host force-kills a player (marks them dead without removing from game).
+    // Used for bugged or disconnected players who are blocking phase progression.
+    // Unlike kick (which deletes them), force-kill keeps them in the game log and graveyard.
+    socket.on('host_force_kill', (pId) => {
+        if (socket.id !== hostSocketId) return;
+        const target = players[pId];
+        if (!target || !target.isAlive) return;
+        target.isAlive = false;
+        logEvent('force_kill', `Round ${roundNumber}: ${target.name} was removed from the game by the Host.`);
+        narratorBroadcast(`${target.name} has been removed from the game.`, false);
+        broadcastGraveyard();
+
+        // If it was their turn to interrogate, skip to the next turn
+        if (gameState === 'INTERROGATION' && currentInterrogatorId === pId) {
+            clearTimeout(phaseTimeoutId);
+            nextInterrogationTurn();
+        }
+        // If they hadn't voted yet, count their vote as SKIP so the phase can proceed
+        if (gameState === 'DAY_VOTE' && !dayVotes[pId]) {
+            dayVotes[pId] = 'SKIP';
+            if (Object.keys(dayVotes).length === Object.values(players).filter(p => p.isAlive || p.id === pId).length) {
+                clearTimeout(phaseTimeoutId);
+                tallyDayVotes();
+            }
+        }
+        // If they were expected to submit a night action, count them as submitted
+        if (gameState === 'NIGHT' && nightTurnActive && !nightActions.submissions.has(pId)) {
+            nightActions.submissions.add(pId);
+            currentNightSubmissions = nightActions.submissions.size;
+            if (currentNightSubmissions >= expectedNightSubmissions && expectedNightSubmissions > 0) {
+                if (!nightTurnActive) return;
+                nightTurnActive = false;
+                clearTimeout(nightTimerTimeout);
+                (async () => {
+                    await new Promise(res => setTimeout(res, 1000));
+                    await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
+                    await new Promise(res => setTimeout(res, 1000));
+                    processNextNightTurn();
+                })();
+            }
         }
     });
 
@@ -337,7 +460,16 @@ io.on('connection', (socket) => {
         activeLocations = (config.customLocations && config.customLocations.trim()) ? config.customLocations.split(',').map(s => s.trim()).filter(s => s) : DEFAULT_LOCATIONS;
 
         resetGameState();
-        Object.values(players).forEach(p => { p.isAlive = true; p.role = null; });
+        Object.values(players).forEach(p => { p.isAlive = true; p.role = null; p.kicked = false; });
+
+        // FIX (Issue 8): Clear mafia_room before reassigning so no stale memberships
+        const mafiaRoom = io.sockets.adapter.rooms.get('mafia_room');
+        if (mafiaRoom) {
+            for (const sockId of mafiaRoom) {
+                const s = io.sockets.sockets.get(sockId);
+                if (s) s.leave('mafia_room');
+            }
+        }
 
         const mafiaIds = [];
         playerIds.forEach((id, index) => {
@@ -364,10 +496,17 @@ io.on('connection', (socket) => {
             });
         });
 
+        // FIX (Issue 3): Send host the truth panel data
+        io.to(hostSocketId).emit('host_truth', {
+            murdererName: players[trueMurderer]?.name,
+            murdererRole: players[trueMurderer]?.role,
+            weapon: trueWeapon,
+            location: trueLocation
+        });
+
         global.gameTheme = config.theme;
         roundNumber = 1;
         broadcastGraveyard();
-        // Clear chat history on all clients at game start
         io.emit('clear_mafia_chat');
         startIntroductionPhase();
     });
@@ -387,13 +526,11 @@ io.on('connection', (socket) => {
         io.emit('start_intro_timer', 20);
 
         phaseTimeoutId = setTimeout(async () => {
-            // Narrator finishes FIRST, then chat opens and 15s timer starts
             await narratorBroadcastAndWait('Everyone, close your eyes. Mafia, open your eyes.', true);
 
             phaseEndTime = Date.now() + 15000;
             io.emit('start_intro_timer', 15);
 
-            // Open Mafia intro chat with pre-built team roster
             const mafiaRoster = Object.values(players)
                 .filter(p => isMafiaTeam(p.role))
                 .map(p => `${p.name} (${getDisplayRole(p)})`)
@@ -415,13 +552,22 @@ io.on('connection', (socket) => {
         if (roundNumber > gameConfig.maxRounds) return startFinalePhase();
         gameState = 'INTERROGATION';
         io.emit('phase_change', 'INTERROGATION');
+        // Issue 6: Reset perfect guess flag at the start of each new round
+        perfectGuessThisRound = false;
         await narratorBroadcastAndWait(`Round ${roundNumber}. The Interrogation Phase begins.`, false);
         interrogationQueue = shuffle(Object.values(players).filter(p => p.isAlive).map(p => p.id));
         nextInterrogationTurn();
     }
 
     async function nextInterrogationTurn() {
-        if (interrogationQueue.length === 0) return startDayPhase();
+        if (interrogationQueue.length === 0) {
+            // Issue 6: All players have submitted — now announce if someone got a perfect guess
+            if (perfectGuessThisRound) {
+                perfectGuessThisRound = false;
+                await narratorBroadcastAndWait('A stunning revelation — someone in this room has made a perfect deduction. Every piece of the puzzle, correct!', false);
+            }
+            return startDayPhase();
+        }
         currentInterrogatorId = interrogationQueue.shift();
         const activeName = players[currentInterrogatorId].name;
         await narratorBroadcastAndWait(`It is now ${activeName}'s turn to interrogate a suspect.`, false);
@@ -449,13 +595,12 @@ io.on('connection', (socket) => {
     socket.on('submit_clue_guess', async (guess) => {
         const player = getPlayerBySocket(socket.id);
         if (!player || player.id !== currentInterrogatorId) return;
-        if (currentInterrogationState.status !== 'GUESSING') return; // double-click lock
+        if (currentInterrogationState.status !== 'GUESSING') return;
         currentInterrogationState.status = 'RESOLVING';
 
         let actualScore = (guess.murderer === trueMurderer ? 1 : 0) + (guess.weapon === trueWeapon ? 1 : 0) + (guess.location === trueLocation ? 1 : 0);
         let reportedScore = actualScore;
 
-        // Logic Jammer deception
         if (jammedPlayers.has(player.id)) {
             const fakeScores = [0, 1, 2, 3].filter(s => s !== actualScore);
             reportedScore = fakeScores[Math.floor(Math.random() * fakeScores.length)];
@@ -472,11 +617,11 @@ io.on('connection', (socket) => {
             symbol
         });
 
-        if (reportedScore === 3) {
-            await narratorBroadcastAndWait('Wait! An incredible deduction has been made! Someone correctly guessed all three pieces of the puzzle!', false);
-        } else {
-            await new Promise(res => setTimeout(res, 2000));
-        }
+        // Issue 6: Flag a perfect guess but don't announce yet — wait for all players to submit.
+        // The announcement fires in nextInterrogationTurn() when the queue is empty.
+        if (actualScore === 3) perfectGuessThisRound = true;
+
+        await new Promise(res => setTimeout(res, 2000));
         nextInterrogationTurn();
     });
 
@@ -497,12 +642,14 @@ io.on('connection', (socket) => {
         gameState = 'DAY_VOTE';
         dayVotes = {};
         io.emit('phase_change', 'DAY_VOTE');
-        await narratorBroadcastAndWait('Discussion ends. You have 30 seconds to lock in an execution vote.', false);
+        // FIX (Issue 7): Use configurable vote timer instead of hardcoded 30s
+        const voteTimer = gameConfig.voteTimer || 30;
+        await narratorBroadcastAndWait(`Discussion ends. You have ${voteTimer} seconds to lock in an execution vote.`, false);
         const aliveList = Object.values(players).filter(p => p.isAlive).map(p => ({ id: p.id, name: p.name }));
         Object.values(players).filter(p => p.isAlive).forEach(p => io.to(p.socketId).emit('prompt_day_vote', aliveList));
-        phaseEndTime = Date.now() + 30000;
-        io.emit('start_day_vote_timer', 30);
-        phaseTimeoutId = setTimeout(tallyDayVotes, 30000);
+        phaseEndTime = Date.now() + (voteTimer * 1000);
+        io.emit('start_day_vote_timer', voteTimer);
+        phaseTimeoutId = setTimeout(tallyDayVotes, voteTimer * 1000);
     }
 
     socket.on('submit_day_vote', (targetId) => {
@@ -516,12 +663,11 @@ io.on('connection', (socket) => {
     });
 
     async function tallyDayVotes() {
-        if (gameState !== 'DAY_VOTE') return; // duplicate-tally lock
+        if (gameState !== 'DAY_VOTE') return;
         gameState = 'TALLYING';
 
         let counts = {};
 
-        // Voodoo Lady curse — if cursed player skipped, everyone's vote is suppressed (no execution)
         if (activeVoodooCurse && players[activeVoodooCurse] && players[activeVoodooCurse].isAlive) {
             const cursedVote = dayVotes[activeVoodooCurse];
             if (!cursedVote || cursedVote === 'SKIP') {
@@ -557,7 +703,7 @@ io.on('connection', (socket) => {
             } else {
                 await narratorBroadcastAndWait(`${players[accId].name} was executed by the town. They were a ${roleReveal}.`, false);
             }
-            logEvent('execution', `Round ${roundNumber}: ${players[accId].name} was executed by the town. (${roleReveal})`);
+            logEvent('execution', `Round ${roundNumber}: ${players[accId].name} was executed. (${roleReveal})`);
 
             if (isMafiaTeam(players[accId].role)) {
                 const cluesToGive = parseInt(gameConfig.cluesPerExecution) || 0;
@@ -576,18 +722,12 @@ io.on('connection', (socket) => {
         gameState = 'NIGHT';
         jammedPlayers.clear();
         nightActions = {
-            mafiaVotes: {},
-            lockedMafiaTarget: null,
-            doctorTarget: null,
-            detectiveTarget: null,
-            detectiveSocketId: null,
-            detectivePlayerId: null,
-            framerTarget: null,
-            voodooTarget: null,
-            socialiteTarget: null,
-            vigilanteTarget: null,
-            jammerTarget: null,
-            submissions: new Set()
+            mafiaVotes: {}, lockedMafiaTarget: null,
+            doctorTarget: null, detectiveTarget: null,
+            detectiveSocketId: null, detectivePlayerId: null,
+            framerTarget: null, voodooTarget: null,
+            socialiteTarget: null, vigilanteTarget: null,
+            jammerTarget: null, submissions: new Set()
         };
         io.emit('phase_change', 'NIGHT');
         await narratorBroadcastAndWait('Night falls. Everyone, close your eyes.', true);
@@ -627,19 +767,16 @@ io.on('connection', (socket) => {
 
         nightTimerEndTime = Date.now() + (time * 1000);
 
-        // Build valid targets per role, with appropriate filters
         let validTargets = Object.values(players).filter(p => p.isAlive);
-        if (currentNightRole === 'Socialite') validTargets = validTargets.filter(p => !livingRolePlayers.some(lp => lp.id === p.id)); // no self-distract
-        if (currentNightRole === 'Mafia') validTargets = validTargets.filter(p => !isMafiaTeam(p.role)); // no self-kill
+        if (currentNightRole === 'Socialite') validTargets = validTargets.filter(p => !livingRolePlayers.some(lp => lp.id === p.id));
+        if (currentNightRole === 'Mafia') validTargets = validTargets.filter(p => !isMafiaTeam(p.role));
         if (currentNightRole === 'Voodoo Lady') validTargets = validTargets.filter(p => !isMafiaTeam(p.role));
 
         livingRolePlayers.forEach(p => {
             io.to(p.socketId).emit('night_action_phase', {
-                role: currentNightRole,
-                time,
+                role: currentNightRole, time,
                 players: validTargets.map(v => ({ id: v.id, name: v.name })),
-                weapons: activeWeapons,
-                locations: activeLocations
+                weapons: activeWeapons, locations: activeLocations
             });
         });
 
@@ -655,7 +792,7 @@ io.on('connection', (socket) => {
     socket.on('submit_night_action', (data) => {
         const p = getPlayerBySocket(socket.id);
         if (!p || !p.isAlive) return;
-        if (nightActions.submissions.has(p.id)) return; // no double submissions
+        if (nightActions.submissions.has(p.id)) return;
         nightActions.submissions.add(p.id);
 
         if (data.role === 'Socialite' && p.role === 'Socialite' && data.targetId !== 'SKIP') nightActions.socialiteTarget = data.targetId;
@@ -663,14 +800,12 @@ io.on('connection', (socket) => {
         if (data.role === 'Framer' && p.role === 'Framer' && data.targetId !== 'SKIP') nightActions.framerTarget = data.targetId;
         if (data.role === 'Voodoo Lady' && p.role === 'Voodoo Lady' && data.targetId !== 'SKIP') nightActions.voodooTarget = data.targetId;
 
-        // Doctor: validate target is still alive (stale UI on reconnect could send a dead ID)
         if (data.role === 'Doctor' && p.role === 'Doctor' && data.targetId !== 'SKIP') {
             if (players[data.targetId] && players[data.targetId].isAlive) {
                 nightActions.doctorTarget = data.targetId;
             }
         }
 
-        // Intel roles: clarify weapon vs location in notepad
         if ((data.role === 'Consigliere' || data.role === 'Intelligence Agent') && p.role === data.role && data.targetItem !== 'SKIP') {
             const isCorrect = (data.targetItem === trueWeapon || data.targetItem === trueLocation);
             const itemCategory = activeWeapons.includes(data.targetItem) ? 'Weapon' : 'Location';
@@ -681,7 +816,6 @@ io.on('connection', (socket) => {
             });
         }
 
-        // Detective: store for deferred result in resolveNight (after Framer/Socialite blocks resolve)
         if (data.role === 'Detective' && p.role === 'Detective' && data.targetId !== 'SKIP') {
             nightActions.detectiveTarget = data.targetId;
             nightActions.detectiveSocketId = socket.id;
@@ -699,7 +833,7 @@ io.on('connection', (socket) => {
             nightTurnActive = false;
             clearTimeout(nightTimerTimeout);
             (async () => {
-                await new Promise(res => setTimeout(res, 4000)); // pause to read results
+                await new Promise(res => setTimeout(res, 4000));
                 await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
                 await new Promise(res => setTimeout(res, 1000));
                 processNextNightTurn();
@@ -710,7 +844,6 @@ io.on('connection', (socket) => {
     socket.on('mafia_vote', (targetId) => {
         const p = getPlayerBySocket(socket.id);
         if (!p || !isMafiaTeam(p.role) || !p.isAlive) return;
-        // Server-side guard: mafia cannot vote for themselves or other mafia members
         if (!players[targetId] || isMafiaTeam(players[targetId].role)) return;
 
         nightActions.mafiaVotes[p.id] = targetId;
@@ -738,32 +871,27 @@ io.on('connection', (socket) => {
 
         if (nightActions.jammerTarget) jammedPlayers.add(nightActions.jammerTarget);
 
-        // Apply Socialite block — cancel the blocked player's action
         const blockedId = nightActions.socialiteTarget;
         if (blockedId && players[blockedId]) {
-            // Any blocked mafia member cancels the kill (kill is a team consensus)
             if (isMafiaTeam(players[blockedId].role)) nightActions.lockedMafiaTarget = null;
             if (players[blockedId].role === 'Doctor') nightActions.doctorTarget = null;
             if (players[blockedId].role === 'Framer') nightActions.framerTarget = null;
-            // jammedPlayers stores TARGET IDs — delete the jammer's target, not the jammer
             if (players[blockedId].role === 'Logic Jammer') jammedPlayers.delete(nightActions.jammerTarget);
             if (players[blockedId].role === 'Voodoo Lady') nightActions.voodooTarget = null;
             if (players[blockedId].role === 'Vigilante') nightActions.vigilanteTarget = null;
             io.to(players[blockedId].socketId).emit('toast_msg', {
-                text: '🍸 Distracted!',
-                type: 'warning',
+                text: '🍸 Distracted!', type: 'warning',
                 notepadText: '\n[NIGHT] You were distracted by the Socialite! Your night action failed.'
             });
             logEvent('distracted', `Round ${roundNumber}: ${players[blockedId].name} (${players[blockedId].role}) was distracted by the Socialite.`);
         }
 
-        // Send Detective result NOW — after Framer/Socialite blocks are fully resolved
         if (nightActions.detectiveTarget && nightActions.detectiveSocketId) {
             const detTarget = nightActions.detectiveTarget;
             if (nightActions.socialiteTarget !== nightActions.detectivePlayerId) {
                 let isEvil = isMafiaTeam(players[detTarget].role);
                 if (players[detTarget].role === 'Godfather') isEvil = false;
-                if (nightActions.framerTarget === detTarget) isEvil = true; // framerTarget already null if framer was blocked
+                if (nightActions.framerTarget === detTarget) isEvil = true;
                 io.to(nightActions.detectiveSocketId).emit('toast_msg', {
                     text: `Scan: ${players[detTarget].name} is ${isEvil ? 'Mafia' : 'Innocent'}!`,
                     type: isEvil ? 'error' : 'success',
@@ -775,7 +903,6 @@ io.on('connection', (socket) => {
         activeVoodooCurse = nightActions.voodooTarget;
         const mTarget = nightActions.lockedMafiaTarget;
         const vigTarget = nightActions.vigilanteTarget;
-
         const diedTonight = [];
 
         if (mTarget && mTarget !== nightActions.doctorTarget) {
@@ -836,7 +963,6 @@ io.on('connection', (socket) => {
             const truth = `${players[trueMurderer].name} in the ${trueLocation} with the ${trueWeapon}`;
             await narratorBroadcastAndWait(vWon ? `🟢 VILLAGERS WIN! Truth: ${truth}` : `❌ MAFIA WINS! Truth: ${truth}`, false);
 
-            // Broadcast full post-game recap
             io.emit('game_recap', {
                 winner: vWon ? 'TOWN' : 'MAFIA',
                 truth: { murdererName: players[trueMurderer].name, weapon: trueWeapon, location: trueLocation },
@@ -853,8 +979,7 @@ io.on('connection', (socket) => {
         if (socket.id !== hostSocketId) return;
         resetGameState();
         gameState = 'LOBBY';
-        Object.values(players).forEach(p => { p.isAlive = true; p.role = null; });
-        // Close intro chat in case reset fires during Mafia's 15s window
+        Object.values(players).forEach(p => { p.isAlive = true; p.role = null; p.kicked = false; });
         io.to('mafia_room').emit('close_mafia_intro_chat');
         io.emit('clear_mafia_chat');
         io.emit('phase_change', 'LOBBY');
