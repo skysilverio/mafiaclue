@@ -379,6 +379,8 @@ io.on('connection', (socket) => {
             if (!nightTurnActive) return;
             nightTurnActive = false;
             (async () => {
+                // BUG S1 FIX: Close action UI before narrating close eyes
+                io.emit('close_night_action');
                 await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
                 processNextNightTurn();
             })();
@@ -530,8 +532,8 @@ io.on('connection', (socket) => {
         const introStory = await getAIStory(global.gameTheme, 'The mystery begins. Briefly establish the setting based on the theme. End by telling everyone to close their eyes. Keep it to 2 or 3 sentences.');
         await narratorBroadcastAndWait(introStory, false);
 
-        phaseEndTime = Date.now() + 20000;
-        io.emit('start_intro_timer', 20);
+        phaseEndTime = Date.now() + 5000;
+        io.emit('start_intro_timer', 5);
 
         phaseTimeoutId = setTimeout(async () => {
             await narratorBroadcastAndWait('Everyone, close your eyes. Mafia, open your eyes.', true);
@@ -586,7 +588,8 @@ io.on('connection', (socket) => {
 
     socket.on('interrogate_target', (targetId) => {
         const player = getPlayerBySocket(socket.id);
-        if (!player || player.id !== currentInterrogatorId || !players[targetId]) return;
+        // Issue 4 FIX: Validate target exists AND is alive — dead players cannot be interrogated
+        if (!player || player.id !== currentInterrogatorId || !players[targetId] || !players[targetId].isAlive) return;
         const durationSec = gameConfig.timer;
         phaseEndTime = Date.now() + (durationSec * 1000);
         currentInterrogationState = { activePlayerId: currentInterrogatorId, activePlayerName: player.name, targetName: players[targetId].name, status: 'TICKING', duration: durationSec };
@@ -791,6 +794,10 @@ io.on('connection', (socket) => {
         nightTimerTimeout = setTimeout(async () => {
             if (!nightTurnActive) return;
             nightTurnActive = false;
+            // BUG S1 FIX (Issue 3): Close the action UI immediately when timer fires,
+            // BEFORE narrating "close your eyes" — prevents action zone staying visible
+            // during narration and overlapping with the next role's window.
+            io.emit('close_night_action');
             await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
             await new Promise(res => setTimeout(res, 1000));
             processNextNightTurn();
@@ -842,6 +849,8 @@ io.on('connection', (socket) => {
             clearTimeout(nightTimerTimeout);
             (async () => {
                 await new Promise(res => setTimeout(res, 4000));
+                // BUG S1 FIX: Close action UI before narrating "close your eyes"
+                io.emit('close_night_action');
                 await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
                 await new Promise(res => setTimeout(res, 1000));
                 processNextNightTurn();
@@ -864,6 +873,8 @@ io.on('connection', (socket) => {
                 clearTimeout(nightTimerTimeout);
                 (async () => {
                     await new Promise(res => setTimeout(res, 4000));
+                    // BUG S1 FIX: Close mafia action UI before narrating close eyes
+                    io.emit('close_night_action');
                     await narratorBroadcastAndWait('Mafia, close your eyes.', true);
                     await new Promise(res => setTimeout(res, 1000));
                     processNextNightTurn();
@@ -874,8 +885,10 @@ io.on('connection', (socket) => {
 
     async function resolveNight() {
         currentNightRole = null;
-        gameState = 'DAY';
-        io.emit('phase_change', 'DAY');
+        // BUG S3 FIX: Do NOT emit phase_change('DAY') here — startInterrogationPhase
+        // will immediately emit 'INTERROGATION', making this intermediate state a
+        // confusing flash. Let startInterrogationPhase set the correct state directly.
+        // gameState is set to 'DAY' briefly as an internal state but not broadcast.
 
         if (nightActions.jammerTarget) jammedPlayers.add(nightActions.jammerTarget);
 
