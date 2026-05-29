@@ -328,13 +328,25 @@ label.field-label { display: block; font-size: 11px; letter-spacing: 0.08em; tex
 #action-modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.75);
   z-index: 800; display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-end;
+}
+@media (min-width: 600px) {
+  #action-modal-overlay {
+    justify-content: center;
+  }
+  #action-modal {
+    border-radius: var(--radius-lg) !important;
+    width: 100%;
+    max-width: 480px;
+    margin-top: 0 !important;
+  }
 }
 #action-modal {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 20px 16px 32px;
-  margin-top: auto;
+  width: 100%;
   max-height: 85vh;
   overflow-y: auto;
 }
@@ -890,7 +902,8 @@ label.field-label { display: block; font-size: 11px; letter-spacing: 0.08em; tex
   <!-- INTRO ZONE -->
   <div id="intro-zone" class="hidden player-only">
     <div class="card" style="text-align:center;">
-      <div style="font-family:var(--font-head); font-size:12px; letter-spacing:.12em; color:var(--text-dim); text-transform:uppercase; margin-bottom:4px;">Memorize your role</div>
+      <div id="intro-card-label" style="font-family:var(--font-head); font-size:12px; letter-spacing:.12em; color:var(--text-dim); text-transform:uppercase; margin-bottom:6px;">Memorize your role</div>
+      <div id="intro-card-timer" style="font-family:var(--font-head); font-size:28px; font-weight:900; color:var(--red);">5</div>
     </div>
     <div id="mafia-intro-zone" class="hidden">
       <div class="card-title" style="color:var(--red);">🔴 Mafia — Eyes Open</div>
@@ -1492,7 +1505,25 @@ socket.on('narrator_event', (d) => {
 // ============================================
 // TIMERS
 // ============================================
-socket.on('start_intro_timer',    (s) => startTopTimer(s));
+socket.on('start_intro_timer', (s) => {
+  startTopTimer(s);
+  // Issue 1 FIX: Show countdown inside the intro card too so players always know
+  // how long they have. After 5s memorize window, update label to "Please wait…"
+  const cardTimer = document.getElementById('intro-card-timer');
+  const cardLabel = document.getElementById('intro-card-label');
+  if (!cardTimer) return;
+  cardTimer.innerText = s;
+  const endMs = Date.now() + s * 1000;
+  const tick = setInterval(() => {
+    const rem = Math.max(0, Math.round((endMs - Date.now()) / 1000));
+    cardTimer.innerText = rem;
+    if (rem <= 0) {
+      clearInterval(tick);
+      if (cardLabel) cardLabel.innerText = 'Please wait…';
+      cardTimer.innerText = '';
+    }
+  }, 500);
+});
 socket.on('start_day_timer',      (s) => {
   startTopTimer(s);
   document.getElementById('day-zone').classList.remove('hidden');
@@ -1556,7 +1587,10 @@ socket.on('interrogation_update', (d) => {
   const s = document.getElementById('interrogation-status');
   const t = document.getElementById('target-selection');
   t.innerHTML='';
-  document.getElementById('action-modal-overlay').classList.add('hidden');
+  // Only close modal if it's not actively being used by this player
+  if (d.status !== 'GUESSING') {
+    document.getElementById('action-modal-overlay').classList.add('hidden');
+  }
 
   if (d.status==='SELECTING_TARGET' && d.activePlayerId===myId) {
     s.innerText='🎯 Select your target:';
@@ -1572,6 +1606,11 @@ socket.on('interrogation_update', (d) => {
     startTopTimer(d.duration);
   } else if (d.status==='GUESSING') {
     s.innerText=`${d.activePlayerName} is locking in their guess…`;
+    // BUG H2 FIX: If this player is the active guesser and the modal isn't open
+    // (e.g. they reconnected mid-GUESSING state), re-open it using stored data
+    if (d.activePlayerId === myId && currentGuessData) {
+      openGuessModal(currentGuessData);
+    }
   } else {
     s.innerText=`Waiting for ${d.activePlayerName}…`;
   }
@@ -1579,12 +1618,20 @@ socket.on('interrogation_update', (d) => {
 
 socket.on('prompt_clue_guess', (d) => {
   currentGuessData = d;
+  openGuessModal(d);
+});
+
+// BUG H2 FIX: Extracted into function so rejoin_attempt can re-open the modal
+// if the player reconnects while status is already 'GUESSING'
+function openGuessModal(d) {
   modalGuess = { murderer:null, location:null, weapon:null };
 
-  // Suspects
+  // Issue 4 FIX: Filter out dead players (prefixed with 👻) from suspect chips.
+  // The murderer could be dead but interrogation targets must be alive.
   const sc = document.getElementById('modal-suspect-chips');
   sc.innerHTML='';
   d.playerList.forEach(p => {
+    if (p.name && p.name.startsWith('👻')) return; // skip dead
     const c=document.createElement('button');
     c.className='action-chip'; c.innerText=p.name; c.setAttribute('data-id',p.id);
     c.onclick=()=>{ sc.querySelectorAll('.action-chip').forEach(x=>x.classList.remove('selected','selected-suspect')); c.classList.add('selected','selected-suspect'); modalGuess.murderer=p.id; modalGuess.murdererName=p.name; };
@@ -1608,9 +1655,8 @@ socket.on('prompt_clue_guess', (d) => {
     c.onclick=()=>{ wc.querySelectorAll('.action-chip').forEach(x=>x.classList.remove('selected','selected-weapon')); c.classList.add('selected','selected-weapon'); modalGuess.weapon=wep; };
     wc.appendChild(c);
   });
-
   document.getElementById('action-modal-overlay').classList.remove('hidden');
-});
+}
 
 function submitModalGuess() {
   if (!modalGuess.murderer||!modalGuess.location||!modalGuess.weapon)
