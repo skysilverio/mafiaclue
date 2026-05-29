@@ -240,7 +240,7 @@ io.on('connection', (socket) => {
     socket.on('rejoin_attempt', (playerId) => {
         const player = players[playerId];
 
-        // FIX (Issue 2): If player was kicked (marked), tell client to clear ID and show login
+        // FIX (Issue 2): If player was kicked, tell client to clear ID and show login
         if (player && player.kicked) {
             io.to(socket.id).emit('you_were_kicked');
             return;
@@ -248,18 +248,26 @@ io.on('connection', (socket) => {
 
         if (!player || gameState === 'LOGIN' || gameState === 'LOBBY') return;
 
+        // BUG FIX: If the player exists but has no role yet (game hasn't fully started,
+        // or they joined just before start_game fired roles), don't emit role_assigned
+        // with a null role — that's what caused the "Unknown/null role" on phone lockout rejoin.
+        // Instead just update their socket and let the normal game flow re-send their role.
         player.socketId = socket.id;
         if (isMafiaTeam(player.role)) socket.join('mafia_room');
 
         io.to(socket.id).emit('rejoin_success', player);
         io.to(socket.id).emit('phase_change', gameState);
-        io.to(socket.id).emit('role_assigned', {
-            displayRole: getDisplayRole(player),
-            coreRole: player.role,
-            playerList: Object.values(players),
-            weapons: activeWeapons,
-            locations: activeLocations
-        });
+
+        // Only emit role_assigned if the player actually has a role assigned
+        if (player.role) {
+            io.to(socket.id).emit('role_assigned', {
+                displayRole: getDisplayRole(player),
+                coreRole: player.role,
+                playerList: Object.values(players),
+                weapons: activeWeapons,
+                locations: activeLocations
+            });
+        }
         broadcastGraveyard();
 
         // Restore server-side clue board state
