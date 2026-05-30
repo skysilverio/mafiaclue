@@ -19,18 +19,20 @@ html{-webkit-tap-highlight-color:transparent;}
 body{font-family:var(--font-body);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;}
 .hidden{display:none!important;}
 h1,h2,h3{font-family:var(--font-head);font-weight:700;}
-.phase-title{font-family:var(--font-head);font-size:clamp(16px,4vw,22px);font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--text);}
-.gold{color:var(--gold);} .red{color:var(--red);} .dim{color:var(--text-dim);}
-.page{max-width:520px;margin:0 auto;padding:12px 12px 80px;}
+.phase-title{font-family:var(--font-head);font-size:clamp(16px,4vw,22px);font-weight:900;letter-spacing:.08em;text-transform:uppercase;}
+.gold{color:var(--gold);}.red{color:var(--red);}.dim{color:var(--text-dim);}
+.page{max-width:520px;margin:0 auto;padding:12px 12px 100px;}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:10px;}
 .card-title{font-family:var(--font-head);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:7px;}
 .card-title::after{content:'';flex:1;height:1px;background:var(--border);}
-.row{display:flex;gap:8px;} .row>*{flex:1;} .stack{display:flex;flex-direction:column;gap:8px;}
+.row{display:flex;gap:8px;}.row>*{flex:1;}.stack{display:flex;flex-direction:column;gap:8px;}
 
 /* TOP BAR */
 #top-bar{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:10px 14px;gap:10px;}
 #phase-badge{font-family:var(--font-head);font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);}
 #top-timer{font-family:var(--font-head);font-size:22px;font-weight:900;color:var(--red);min-width:64px;text-align:center;}
+#top-timer.paused{color:var(--warning);animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
 #top-guide-btn{background:var(--surface);border:1px solid var(--border);color:var(--text-dim);padding:6px 12px;border-radius:var(--radius);font-size:12px;cursor:pointer;font-family:var(--font-body);white-space:nowrap;}
 
 /* INPUTS */
@@ -45,33 +47,32 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 /* BUTTONS */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 18px;border-radius:var(--radius);font-family:var(--font-body);font-size:14px;font-weight:500;border:none;cursor:pointer;transition:opacity .15s,transform .1s;text-align:center;width:100%;letter-spacing:.02em;}
 .btn:active{transform:scale(.97);opacity:.85;}
-.btn-primary{background:var(--green);color:#fff;}
-.btn-danger{background:var(--red);color:#fff;}
-.btn-gold{background:var(--gold);color:#0e0e12;font-weight:700;}
-.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
-.btn-warning{background:var(--warning);color:#fff;}
-.btn-sm{width:auto;padding:7px 13px;font-size:12px;}
+.btn-primary{background:var(--green);color:#fff;}.btn-danger{background:var(--red);color:#fff;}
+.btn-gold{background:var(--gold);color:#0e0e12;font-weight:700;}.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn-warning{background:var(--warning);color:#fff;}.btn-sm{width:auto;padding:7px 13px;font-size:12px;}
 .btn-dark-red{background:#5c1a1a;color:#ff9999;border:1px solid var(--red-dim);}
 
 /* TOASTS */
 #toast-container{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;width:90%;max-width:360px;pointer-events:none;}
 .toast{padding:12px 16px;border-radius:var(--radius);font-weight:600;font-size:13px;text-align:center;color:#fff;animation:toastIn .3s ease,toastOut .4s ease 4.6s forwards;box-shadow:0 4px 20px rgba(0,0,0,.5);}
-.toast.success{background:var(--green);} .toast.warning{background:var(--warning);} .toast.error{background:var(--red);}
+.toast.success{background:var(--green);}.toast.warning{background:var(--warning);}.toast.error{background:var(--red);}
 @keyframes toastIn{from{transform:translateY(-20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
 @keyframes toastOut{to{opacity:0;pointer-events:none;}}
 
-/* GAME EVENT NOTIFICATION BANNER */
+/* GAME EVENT BANNERS */
 #game-event-container{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9998;display:flex;flex-direction:column;gap:8px;width:92%;max-width:400px;pointer-events:none;}
-.game-event{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:var(--radius-lg);font-size:13px;font-weight:500;color:var(--text);box-shadow:0 6px 24px rgba(0,0,0,.6);animation:eventIn .4s cubic-bezier(.16,1,.3,1),eventOut .5s ease 6s forwards;border:1px solid var(--border);}
-.game-event.execution{background:#2a1505;border-color:var(--warning);}
-.game-event.danger{background:#1a0808;border-color:var(--red-dim);}
-.game-event.success{background:#081a0e;border-color:var(--green);}
-.game-event.neutral{background:var(--surface2);border-color:var(--border);}
+.game-event{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:var(--radius-lg);font-size:13px;font-weight:500;color:var(--text);box-shadow:0 6px 24px rgba(0,0,0,.6);animation:eventIn .4s cubic-bezier(.16,1,.3,1),eventOut .5s ease 7s forwards;border:1px solid var(--border);}
+.game-event.execution{background:#2a1505;border-color:var(--warning);}.game-event.danger{background:#1a0808;border-color:var(--red-dim);}
+.game-event.success{background:#081a0e;border-color:var(--green);}.game-event.neutral{background:var(--surface2);border-color:var(--border);}
 .game-event.info{background:var(--surface2);border-color:var(--gold-dim);}
-.game-event-icon{font-size:20px;flex-shrink:0;}
-.game-event-msg{flex:1;line-height:1.4;}
+.game-event-icon{font-size:20px;flex-shrink:0;}.game-event-msg{flex:1;line-height:1.4;}
 @keyframes eventIn{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
 @keyframes eventOut{to{opacity:0;pointer-events:none;}}
+
+/* REOPEN ACTION BUTTON — fixed above event banners */
+#reopen-action-btn{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:9997;display:none;background:var(--gold);color:#0e0e12;font-family:var(--font-head);font-weight:700;font-size:13px;letter-spacing:.06em;padding:12px 24px;border:none;border-radius:999px;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap;animation:reopenPop .3s cubic-bezier(.16,1,.3,1);}
+#reopen-action-btn.visible{display:block;}
+@keyframes reopenPop{from{transform:translateX(-50%) scale(.8);opacity:0;}to{transform:translateX(-50%) scale(1);opacity:1;}}
 
 /* ROLE CARD */
 #role-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:10px;}
@@ -82,7 +83,7 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 #role-team{font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;}
 #role-desc{font-size:13px;color:var(--text-dim);line-height:1.6;}
 
-/* NARRATOR — collapsible */
+/* NARRATOR — collapsible by clicking header */
 #narrator-card{background:var(--surface);border:1px solid var(--gold-dim);border-left:3px solid var(--gold);border-radius:var(--radius-lg);margin-bottom:10px;overflow:hidden;}
 #narrator-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;}
 #narrator-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);font-family:var(--font-head);}
@@ -96,7 +97,7 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 #narrator-minimize-btn:hover{color:var(--gold);}
 
 /* CLUE BOARD */
-#clue-board-header{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:11px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;color:var(--gold);font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-family:var(--font-head);margin-bottom:0;transition:background .15s;}
+#clue-board-header{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:11px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;color:var(--gold);font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-family:var(--font-head);transition:background .15s;}
 #clue-board-header:hover{background:var(--surface);}
 #clue-board-header.open{border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
 #clue-board-body{background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);padding:14px;margin-bottom:10px;}
@@ -104,7 +105,7 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 .clue-section-label:first-child{margin-top:0;}
 .clue-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);margin-bottom:10px;}
 .clue-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:5px;}
-.clue-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);border-radius:var(--radius);padding:7px 10px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px;font-family:var(--font-body);transition:border-color .15s,background .15s;text-align:left;}
+.clue-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);border-radius:var(--radius);padding:7px 10px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px;font-family:var(--font-body);transition:border-color .15s;text-align:left;}
 .clue-btn:hover{border-color:var(--gold-dim);}
 .clue-btn .clue-icon{font-size:11px;flex-shrink:0;}
 .clue-btn.state-1{background:#2a1010;border-color:var(--red-dim);color:var(--text-muted);text-decoration:line-through;}
@@ -113,79 +114,31 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 .clue-btn.dead-player{opacity:.5;text-decoration:line-through;}
 #clue-notepad{margin-top:10px;background:#131313;border:1px solid var(--border);color:var(--text);font-size:12px;padding:10px;border-radius:var(--radius);min-height:64px;font-family:var(--font-body);width:100%;resize:vertical;}
 
-/* UNIFIED ACTION MODAL — all popups use this */
+/* ACTION MODAL */
 #action-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;}
 #action-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding:20px 16px 32px;width:100%;max-height:88vh;overflow-y:auto;}
 @media(min-width:600px){#action-modal-overlay{justify-content:center;}#action-modal{border-radius:var(--radius-lg);width:100%;max-width:480px;}}
-#action-modal-title{font-family:var(--font-head);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:4px;text-align:center;}
-#action-modal-subtitle{font-family:var(--font-head);font-size:18px;font-weight:900;text-align:center;margin-bottom:16px;color:var(--text);}
+#action-modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+#action-modal-title{font-family:var(--font-head);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+#action-modal-close-btn{background:transparent;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;}
+#action-modal-subtitle{font-family:var(--font-head);font-size:18px;font-weight:900;margin-bottom:16px;color:var(--text);}
 .action-section{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px;}
 .action-section-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim);text-align:center;margin-bottom:8px;font-family:var(--font-head);}
 .action-section-icon{display:block;font-size:22px;text-align:center;margin-bottom:6px;}
 .action-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;}
-/* FIX: All chip states use the same gold highlight color */
 .action-chip{background:var(--surface);border:1px solid var(--border);color:var(--text-dim);border-radius:var(--radius);padding:7px 12px;font-size:13px;cursor:pointer;font-family:var(--font-body);transition:all .15s;}
 .action-chip:hover{border-color:var(--gold-dim);color:var(--text);}
 .action-chip.selected{background:var(--gold);color:#0e0e12;border-color:var(--gold);font-weight:600;}
-/* Night action list items (large tap targets) */
 .night-chip{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:13px 16px;font-size:14px;cursor:pointer;font-family:var(--font-body);transition:all .15s;width:100%;text-align:left;display:block;margin-bottom:6px;}
 .night-chip:hover{border-color:var(--gold-dim);}
-.night-chip.selected{background:var(--gold-dim);border-color:var(--gold);}
 .night-chip.skip{color:var(--text-muted);border-style:dashed;}
-/* Mafia chat inside kill modal */
 #mafia-modal-chat-box{height:80px;overflow-y:auto;background:#0a0a0a;border:1px solid var(--border);border-radius:var(--radius);padding:8px;font-size:12px;color:var(--text);margin-bottom:8px;}
 #mafia-modal-chat-box p{margin:2px 0;}
 .modal-chat-row{display:flex;gap:6px;margin-bottom:10px;}
 .modal-chat-row input{flex:1;font-size:13px;}
-
-/* VOTE MODAL */
-.vote-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:14px 10px;border-radius:var(--radius);cursor:pointer;font-size:14px;font-family:var(--font-body);transition:background .15s,border-color .15s;text-align:center;width:100%;display:block;margin-bottom:6px;}
+.vote-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:14px 10px;border-radius:var(--radius);cursor:pointer;font-size:14px;font-family:var(--font-body);transition:background .15s;text-align:center;width:100%;display:block;margin-bottom:6px;}
 .vote-btn:hover{background:var(--red-dim);border-color:var(--red);}
 .vote-btn.skip-btn{color:var(--text-muted);border-style:dashed;}
-.vote-btn.locked{background:var(--red);color:#fff;pointer-events:none;}
-
-/* HOST ADMIN */
-#host-admin-panel{background:var(--surface);border:1px solid var(--red-dim);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:10px;}
-#host-admin-header{background:#1a0808;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;}
-#host-admin-header-title{font-family:var(--font-head);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--red);}
-#host-admin-body{padding:14px;display:none;}
-#host-admin-body.open{display:block;}
-#host-truth-card{background:#120606;border:1px solid var(--red-dim);border-radius:var(--radius);padding:12px;margin-bottom:12px;}
-.truth-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;}
-.truth-label{color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;width:70px;flex-shrink:0;}
-.truth-value{color:var(--gold);font-weight:600;}
-#truth-toggle-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);font-size:11px;padding:5px 10px;border-radius:var(--radius);cursor:pointer;margin-bottom:10px;font-family:var(--font-body);width:100%;text-align:center;}
-#truth-toggle-btn:hover{border-color:var(--gold-dim);color:var(--gold);}
-.admin-controls-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
-.host-player-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
-.host-player-row:last-child{border:none;}
-.host-player-status{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-.host-player-status.alive{background:var(--green);} .host-player-status.dead{background:var(--red-dim);}
-.host-player-name{flex:1;} .host-player-role{font-size:11px;color:var(--text-dim);}
-.host-player-actions{display:flex;gap:4px;}
-
-/* MODALS */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:900;overflow-y:auto;padding:20px 12px;}
-.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);max-width:500px;margin:0 auto;padding:20px;position:relative;}
-.modal-close{position:absolute;top:14px;right:14px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;font-family:var(--font-body);}
-.modal-close:hover{color:var(--red);border-color:var(--red-dim);}
-.modal-title{font-family:var(--font-head);font-size:20px;font-weight:700;color:var(--gold);margin-bottom:16px;padding-right:30px;}
-
-/* RECAP */
-.recap-winner{font-family:var(--font-head);font-size:22px;font-weight:900;margin-bottom:4px;}
-.recap-winner.town{color:var(--green);} .recap-winner.mafia{color:var(--red);}
-.recap-truth-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:13px;}
-.recap-roles{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
-.recap-role-chip{padding:5px 10px;border-radius:var(--radius);font-size:12px;border-left:3px solid transparent;}
-.recap-role-chip.town{background:var(--green-dim);border-color:var(--green);}
-.recap-role-chip.mafia{background:var(--red-dim);border-color:var(--red);}
-.recap-role-chip.dead{opacity:.45;text-decoration:line-through;}
-.recap-log-entry{padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:8px;}
-.recap-log-entry:last-child{border:none;}
-.recap-log-entry.execution{color:var(--warning);} .recap-log-entry.night_kill{color:#e88;}
-.recap-log-entry.vigilante_kill{color:#faa;} .recap-log-entry.saved{color:var(--green);}
-.recap-log-entry.distracted{color:#aa88ff;} .recap-log-entry.no_execution{color:var(--text-muted);}
-.recap-log-entry.force_kill{color:var(--red);font-style:italic;}
 
 /* HOST LOBBY */
 .player-pill{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:6px 12px 6px 6px;}
@@ -206,7 +159,7 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 .role-toggle-card.active-mafia .role-toggle-pill{background:var(--red-dim);}
 .role-toggle-card.active-mafia .role-toggle-pill::after{transform:translateX(14px);background:#ff9999;}
 .roles-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.accordion-header{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;color:var(--text-dim);font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-family:var(--font-body);margin-bottom:6px;}
+.accordion-header{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;color:var(--text-dim);font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-family:var(--font-body);margin-bottom:6px;transition:all .15s;}
 .accordion-header.open{border-color:var(--gold-dim);color:var(--gold);border-radius:var(--radius) var(--radius) 0 0;margin-bottom:0;}
 .accordion-body{background:var(--surface2);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:14px;margin-bottom:6px;}
 .number-spin{display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
@@ -215,15 +168,78 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 .spin-btn:first-child{border-left:none;border-right:1px solid var(--border);}
 .spin-btn:hover{background:var(--border);color:var(--text);}
 
+/* HOST ADMIN */
+#host-admin-panel{background:var(--surface);border:1px solid var(--red-dim);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:10px;}
+#host-admin-header{background:#1a0808;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;}
+#host-admin-header-title{font-family:var(--font-head);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--red);}
+#host-admin-body{padding:14px;display:none;}
+#host-admin-body.open{display:block;}
+#host-truth-card{background:#120606;border:1px solid var(--red-dim);border-radius:var(--radius);padding:12px;margin-bottom:12px;}
+.truth-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;}
+.truth-label{color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;width:70px;flex-shrink:0;}
+.truth-value{color:var(--gold);font-weight:600;}
+#truth-toggle-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);font-size:11px;padding:5px 10px;border-radius:var(--radius);cursor:pointer;margin-bottom:10px;font-family:var(--font-body);width:100%;text-align:center;}
+#truth-toggle-btn:hover{border-color:var(--gold-dim);color:var(--gold);}
+.admin-controls-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.host-player-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.host-player-row:last-child{border:none;}
+.host-player-status{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.host-player-status.alive{background:var(--green);}.host-player-status.dead{background:var(--red-dim);}
+.host-player-name{flex:1;}.host-player-role{font-size:11px;color:var(--text-dim);}
+.host-player-actions{display:flex;gap:4px;}
+
+/* AI OPTIONS PANEL */
+.ai-toggle-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+.ai-toggle-row:last-child{border:none;}
+.ai-toggle-info{flex:1;}
+.ai-toggle-label{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;}
+.ai-toggle-desc{font-size:11px;color:var(--text-muted);line-height:1.4;}
+.toggle-switch{flex-shrink:0;width:40px;height:22px;border-radius:999px;background:var(--border);border:none;cursor:pointer;position:relative;transition:background .2s;}
+.toggle-switch::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--text-muted);transition:transform .2s,background .2s;}
+.toggle-switch.on{background:var(--green);}
+.toggle-switch.on::after{transform:translateX(18px);background:#fff;}
+.toggle-switch.on-warning{background:var(--warning);}
+.toggle-switch.on-warning::after{transform:translateX(18px);background:#fff;}
+
+/* LIVE FEED */
+#live-feed-log{background:#0a0a0a;border:1px solid var(--border);border-radius:var(--radius);padding:8px;max-height:120px;overflow-y:auto;font-size:11px;color:var(--text-dim);margin-top:8px;}
+#live-feed-log p{padding:2px 0;border-bottom:1px solid var(--border);}
+#live-feed-log p:last-child{border:none;color:var(--text);}
+
+/* Night sequence for manual prompting */
+#night-role-buttons{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.night-role-wake-btn{background:var(--red-dim);border:1px solid var(--red-dim);color:#ff9999;padding:6px 12px;border-radius:var(--radius);cursor:pointer;font-size:12px;font-family:var(--font-body);}
+.night-role-wake-btn:hover{background:var(--red);color:#fff;}
+
 /* INTRO CHAT */
 #mafia-intro-zone{background:#1a0808;border:1px solid var(--red-dim);border-radius:var(--radius-lg);padding:14px;margin-top:10px;}
 #mafia-intro-roster{font-size:12px;color:var(--gold);background:#0d0404;padding:8px;border-radius:var(--radius);margin-bottom:10px;line-height:1.8;}
 #mafia-intro-log{height:80px;overflow-y:auto;background:#0a0a0a;border:1px solid var(--border);border-radius:var(--radius);padding:6px;font-size:12px;margin-bottom:8px;}
 .intro-chat-name{color:#ff9999;font-weight:600;}
-.chat-row{display:flex;gap:6px;}
-.chat-row input{flex:1;font-size:13px;}
+.chat-row{display:flex;gap:6px;}.chat-row input{flex:1;font-size:13px;}
 
-/* GUIDE */
+/* MODALS */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:900;overflow-y:auto;padding:20px 12px;}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);max-width:500px;margin:0 auto;padding:20px;position:relative;}
+.modal-close{position:absolute;top:14px;right:14px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;}
+.modal-close:hover{color:var(--red);border-color:var(--red-dim);}
+.modal-title{font-family:var(--font-head);font-size:20px;font-weight:700;color:var(--gold);margin-bottom:16px;padding-right:30px;}
+
+/* RECAP */
+.recap-winner{font-family:var(--font-head);font-size:22px;font-weight:900;margin-bottom:4px;}
+.recap-winner.town{color:var(--green);}.recap-winner.mafia{color:var(--red);}
+.recap-truth-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:13px;}
+.recap-roles{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.recap-role-chip{padding:5px 10px;border-radius:var(--radius);font-size:12px;border-left:3px solid transparent;}
+.recap-role-chip.town{background:var(--green-dim);border-color:var(--green);}
+.recap-role-chip.mafia{background:var(--red-dim);border-color:var(--red);}
+.recap-role-chip.dead{opacity:.45;text-decoration:line-through;}
+.recap-log-entry{padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:8px;}
+.recap-log-entry:last-child{border:none;}
+.recap-log-entry.execution{color:var(--warning);}.recap-log-entry.night_kill{color:#e88;}
+.recap-log-entry.vigilante_kill{color:#faa;}.recap-log-entry.saved{color:var(--green);}
+.recap-log-entry.distracted{color:#aa88ff;}.recap-log-entry.no_execution{color:var(--text-muted);}
+.recap-log-entry.force_kill{color:var(--red);font-style:italic;}
 .guide-role-entry{padding:10px 0;border-bottom:1px solid var(--border);}
 .guide-role-entry:last-child{border:none;}
 .guide-role-name{font-weight:600;font-size:13px;margin-bottom:2px;}
@@ -236,6 +252,8 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 
 <div id="toast-container"></div>
 <div id="game-event-container"></div>
+<!-- Feature 2: Persistent reopen button for dismissed modals -->
+<button id="reopen-action-btn" onclick="reopenCurrentModal()"></button>
 
 <!-- TOP BAR -->
 <div id="top-bar">
@@ -265,13 +283,13 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 <div id="lobby-screen" class="hidden">
   <div id="host-roster-card" class="card hidden">
     <div class="card-title">Player Roster</div>
-    <div id="host-player-roster-lobby" class="player-roster-grid" style="gap:8px;"></div>
+    <div id="host-player-roster-lobby" class="player-roster-grid"></div>
   </div>
   <div id="player-lobby-wait" class="hidden" style="text-align:center;padding:30px 0;">
     <div style="font-family:var(--font-head);font-size:30px;color:var(--gold);margin-bottom:8px;">Lobby</div>
     <div id="player-count-badge" style="font-size:13px;color:var(--text-dim);"></div>
     <div id="player-list-names" style="margin-top:16px;font-size:13px;color:var(--text-dim);line-height:2;"></div>
-    <p style="margin-top:24px;font-size:12px;color:var(--text-muted);">Waiting for the host to start the game…</p>
+    <p style="margin-top:24px;font-size:12px;color:var(--text-muted);">Waiting for the host to start…</p>
   </div>
   <div id="host-setup" class="hidden">
     <div class="card">
@@ -283,8 +301,8 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
       </div>
       <div class="row" style="gap:10px;">
         <div><label class="field-label">Interrogation (s)</label><div class="number-spin"><button class="spin-btn" onclick="spinNum('config-timer',-5)">−</button><input type="number" id="config-timer" value="60" min="10"><button class="spin-btn" onclick="spinNum('config-timer',5)">+</button></div></div>
-        <div><label class="field-label">Day Discussion (s)</label><div class="number-spin"><button class="spin-btn" onclick="spinNum('config-day-timer',-10)">−</button><input type="number" id="config-day-timer" value="120" min="20"><button class="spin-btn" onclick="spinNum('config-day-timer',10)">+</button></div></div>
-        <div><label class="field-label">Vote Timer (s)</label><div class="number-spin"><button class="spin-btn" onclick="spinNum('config-vote-timer',-5)">−</button><input type="number" id="config-vote-timer" value="30" min="10"><button class="spin-btn" onclick="spinNum('config-vote-timer',5)">+</button></div></div>
+        <div><label class="field-label">Day (s)</label><div class="number-spin"><button class="spin-btn" onclick="spinNum('config-day-timer',-10)">−</button><input type="number" id="config-day-timer" value="120" min="20"><button class="spin-btn" onclick="spinNum('config-day-timer',10)">+</button></div></div>
+        <div><label class="field-label">Vote (s)</label><div class="number-spin"><button class="spin-btn" onclick="spinNum('config-vote-timer',-5)">−</button><input type="number" id="config-vote-timer" value="30" min="10"><button class="spin-btn" onclick="spinNum('config-vote-timer',5)">+</button></div></div>
       </div>
     </div>
     <button class="accordion-header" id="adv-acc-btn" onclick="toggleAccordion('adv-acc-btn','adv-acc-body')">⚙ Advanced Options <span>▾</span></button>
@@ -293,7 +311,31 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
       <div class="field"><label class="field-label">Custom Locations (comma separated)</label><input type="text" id="config-loc" placeholder="Leave blank for defaults"></div>
       <div class="row" style="gap:10px;margin-bottom:8px;">
         <div><label class="field-label">Clues / Execution</label><div class="number-spin"><button class="spin-btn" onclick="spinNum('config-clues',-1)">−</button><input type="number" id="config-clues" value="2" min="0" max="5"><button class="spin-btn" onclick="spinNum('config-clues',1)">+</button></div></div>
-        <div style="display:flex;align-items:flex-end;padding-bottom:2px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-dim);"><input type="checkbox" id="config-blind" style="width:auto;accent-color:var(--red);"> Blind Executions</label></div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:2px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-dim);"><input type="checkbox" id="config-blind" style="width:auto;accent-color:var(--red);">Blind Executions</label></div>
+      </div>
+    </div>
+    <!-- Feature 6: AI Options accordion -->
+    <button class="accordion-header" id="ai-acc-btn" onclick="toggleAccordion('ai-acc-btn','ai-acc-body')">🤖 AI &amp; GM Options <span>▾</span></button>
+    <div class="accordion-body hidden" id="ai-acc-body">
+      <div class="ai-toggle-row">
+        <div class="ai-toggle-info"><div class="ai-toggle-label">AI Narration</div><div class="ai-toggle-desc">Generates atmospheric story text for night events, intros, and summaries. Disable for a human GM to narrate everything.</div></div>
+        <button class="toggle-switch on" id="opt-ai-narration" onclick="toggleAiOpt(this,'aiNarrationEnabled')"></button>
+      </div>
+      <div class="ai-toggle-row">
+        <div class="ai-toggle-info"><div class="ai-toggle-label">Manual Phase Progression</div><div class="ai-toggle-desc">Phases do not advance automatically on timer expiry. A "Next Phase" button appears on the host panel, giving the GM full control over pacing.</div></div>
+        <button class="toggle-switch" id="opt-manual-phase" onclick="toggleAiOpt(this,'manualPhaseProgression')"></button>
+      </div>
+      <div class="ai-toggle-row">
+        <div class="ai-toggle-info"><div class="ai-toggle-label">Live Action Feed</div><div class="ai-toggle-desc">Shows the GM exactly who targeted whom during the Night Phase in real time (e.g. "Doctor protected Player X").</div></div>
+        <button class="toggle-switch" id="opt-live-feed" onclick="toggleAiOpt(this,'liveActionFeedEnabled')"></button>
+      </div>
+      <div class="ai-toggle-row">
+        <div class="ai-toggle-info"><div class="ai-toggle-label">Reveal Clue Board Poisoning</div><div class="ai-toggle-desc">When a Logic Jammer acts, the GM panel shows exactly which player's clue board is receiving false data.</div></div>
+        <button class="toggle-switch" id="opt-poison" onclick="toggleAiOpt(this,'revealCluePoisoning')"></button>
+      </div>
+      <div class="ai-toggle-row">
+        <div class="ai-toggle-info"><div class="ai-toggle-label">Manual Role Prompting</div><div class="ai-toggle-desc">The fixed night sequence is replaced with a role list on the GM panel. The GM clicks "Wake Up" to push the UI to each role's player in any order.</div></div>
+        <button class="toggle-switch" id="opt-manual-roles" onclick="toggleAiOpt(this,'manualRolePrompting')"></button>
       </div>
     </div>
     <div class="card">
@@ -316,7 +358,7 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 <div id="game-board" class="hidden">
   <div id="phase-tooltip-bar" class="phase-tooltip"></div>
 
-  <!-- HOST ADMIN PANEL -->
+  <!-- HOST ADMIN PANEL — persists across all phases -->
   <div id="host-admin-panel" class="hidden">
     <div id="host-admin-header" onclick="toggleAdminBody()">
       <span id="host-admin-header-title">⚡ Host Admin</span>
@@ -329,12 +371,32 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
         <div class="truth-row"><span class="truth-label">Weapon</span><span class="truth-value" id="truth-weapon-val">—</span></div>
         <div class="truth-row"><span class="truth-label">Location</span><span class="truth-value" id="truth-location-val">—</span></div>
       </div>
+      <!-- Phase controls -->
       <div class="admin-controls-row">
         <button class="btn btn-warning btn-sm" onclick="socket.emit('host_force_next')">⏩ Force Next</button>
+        <button class="btn btn-ghost btn-sm" id="host-pause-btn" onclick="hostPauseTimer()">⏸ Pause</button>
         <button class="btn btn-ghost btn-sm" onclick="socket.emit('host_inject_clue')">💉 Clue</button>
         <button class="btn btn-ghost btn-sm" onclick="socket.emit('reset_game')">🔄 Reset</button>
       </div>
-      <div id="host-admin-player-list" style="margin-bottom:10px;"></div>
+      <!-- Feature 6b: Manual phase next button (shown when manual mode on) -->
+      <div id="manual-phase-controls" class="hidden admin-controls-row">
+        <button class="btn btn-primary btn-sm" onclick="socket.emit('host_force_next')" style="background:var(--gold);color:#0e0e12;">▶ Next Phase</button>
+        <button class="btn btn-ghost btn-sm" onclick="socket.emit('host_advance_interrogation')">▶ Next Interrogation</button>
+      </div>
+      <!-- Feature 6d: Live action feed -->
+      <div id="live-feed-section" class="hidden">
+        <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin:8px 0 4px;font-family:var(--font-head);">Live Action Feed</div>
+        <div id="live-feed-log"></div>
+      </div>
+      <!-- Feature 6e: Clue board poisoning alert -->
+      <div id="poison-alert" class="hidden" style="background:#1a0808;border:1px solid var(--red-dim);border-radius:var(--radius);padding:8px;margin-bottom:8px;font-size:12px;color:#ff9999;"></div>
+      <!-- Feature 6f: Night role buttons for manual prompting -->
+      <div id="manual-role-section" class="hidden">
+        <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin:8px 0 4px;font-family:var(--font-head);">Wake Up Role</div>
+        <div id="night-role-buttons"></div>
+      </div>
+      <!-- Player list -->
+      <div id="host-admin-player-list"></div>
     </div>
   </div>
 
@@ -345,25 +407,21 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
       <span id="role-card-arrow">▾</span>
     </button>
     <div id="role-card-body">
-      <div id="role-name"></div>
-      <div id="role-team"></div>
-      <div id="role-desc"></div>
+      <div id="role-name"></div><div id="role-team"></div><div id="role-desc"></div>
     </div>
   </div>
 
-  <!-- NARRATOR (collapsible) -->
+  <!-- NARRATOR — click header to minimize/expand (Feature 3) -->
   <div id="narrator-card">
-    <div id="narrator-header">
+    <div id="narrator-header" onclick="toggleNarrator()">
       <span id="narrator-label">🎤 Narrator</span>
       <div style="display:flex;align-items:center;gap:8px;">
         <span id="narrator-minimize-label" style="font-size:11px;color:var(--text-muted);font-style:italic;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;"></span>
-        <button id="narrator-minimize-btn" onclick="toggleNarrator()">▾ Minimize</button>
+        <button id="narrator-minimize-btn" onclick="event.stopPropagation();toggleNarrator()">▾ Minimize</button>
       </div>
     </div>
     <div id="narrator-current"></div>
-    <div id="narrator-body">
-      <ul id="narrator-log"></ul>
-    </div>
+    <div id="narrator-body"><ul id="narrator-log"></ul></div>
   </div>
 
   <!-- CLUE BOARD -->
@@ -378,12 +436,8 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
     </div>
   </div>
 
-  <!-- INTRO ZONE -->
+  <!-- INTRO ZONE — Bug 1 fix: removed the duplicate card with intro-card-timer -->
   <div id="intro-zone" class="hidden player-only">
-    <div class="card" style="text-align:center;">
-      <div id="intro-card-label" style="font-family:var(--font-head);font-size:12px;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:6px;">Memorize your role</div>
-      <div id="intro-card-timer" style="font-family:var(--font-head);font-size:28px;font-weight:900;color:var(--red);">5</div>
-    </div>
     <div id="mafia-intro-zone" class="hidden">
       <div class="card-title" style="color:var(--red);">🔴 Mafia — Eyes Open</div>
       <div id="mafia-intro-roster"></div>
@@ -429,9 +483,9 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
 <!-- UNIFIED ACTION MODAL -->
 <div id="action-modal-overlay" class="hidden" onclick="handleOverlayClick(event)">
   <div id="action-modal">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+    <div id="action-modal-header">
       <div id="action-modal-title">Required Action</div>
-      <button onclick="closeModal()" style="background:transparent;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;">✕</button>
+      <button id="action-modal-close-btn" onclick="closeModal()">✕</button>
     </div>
     <div id="action-modal-subtitle"></div>
     <div id="action-modal-body"></div>
@@ -459,11 +513,11 @@ label.field-label{display:block;font-size:11px;letter-spacing:.08em;text-transfo
     <button class="modal-close" onclick="toggleGuide()">✕</button>
     <div class="modal-title">How to Play</div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:13px;margin-bottom:16px;line-height:1.7;">
-      <p><b style="color:var(--gold);">Goal:</b> Town deduces the crime (Who, Where, What) or executes all Mafia. Mafia must outnumber Town.</p>
-      <p style="margin-top:8px;"><b style="color:var(--gold);">Interrogation:</b> Guess Who + Where + What. 🟢 All correct &nbsp;⚠️ 1–2 correct &nbsp;❌ None correct.</p>
-      <p style="margin-top:8px;"><b style="color:var(--gold);">Town Hall:</b> Discuss, then vote to execute a suspect.</p>
-      <p style="margin-top:8px;"><b style="color:var(--gold);">Night:</b> Eyes closed. Mafia chooses a target. Special roles act in secret.</p>
-      <p style="margin-top:8px;"><b style="color:var(--gold);">Finale:</b> After max rounds, everyone submits a final accusation.</p>
+      <p><b style="color:var(--gold);">Goal:</b> Town deduces the crime (Who, Where, What) or executes all Mafia.</p>
+      <p style="margin-top:8px;"><b style="color:var(--gold);">Interrogation:</b> 🟢 All correct &nbsp;⚠️ 1–2 correct &nbsp;❌ None correct.</p>
+      <p style="margin-top:8px;"><b style="color:var(--gold);">Town Hall:</b> Discuss, then vote to execute.</p>
+      <p style="margin-top:8px;"><b style="color:var(--gold);">Night:</b> Eyes closed. Special roles act in secret.</p>
+      <p style="margin-top:8px;"><b style="color:var(--gold);">Finale:</b> Submit your final accusation.</p>
     </div>
     <div class="guide-team-header" style="color:var(--mafia);">Mafia Team</div>
     <div id="guide-mafia"></div>
@@ -485,28 +539,33 @@ let clueBoardOpen = false;
 let adminBodyOpen = true;
 let truthVisible = false;
 let narratorMinimized = false;
-let modalGuess = { murderer:null, location:null, weapon:null };
+let modalGuess = {murderer:null,location:null,weapon:null};
 let currentGuessData = null;
+let currentModalType = null; // tracks what modal is active for reopen button
+let currentModalData = null; // stores data needed to reopen
+let mafiaChatHistory = [];
+let pendingAiOptions = {}; // accumulates toggle changes before game start
+let timerPaused = false;
 
 // ============================================
 // ROLE / PHASE DATA
 // ============================================
 const ROLE_DESC = {
-  'Consigliere':'Investigates one weapon or location each night to learn if it is part of the true crime.',
-  'Logic Jammer':"Targets a player each night — their next interrogation result shows false data.",
-  'Framer':'Frames one player each night; if the Detective scans them, they appear as Mafia.',
+  'Consigliere':'Investigates one weapon or location each night.',
+  'Logic Jammer':"Corrupts a player's next interrogation result.",
+  'Framer':'Frames one player — Detective sees them as Mafia.',
   'Godfather':'Immune to Detective scans — always appears Innocent.',
-  'Voodoo Lady':"Curses one Town player. The next day, only the cursed player's vote counts.",
-  'Mafia Murderer':'You committed the crime. Eliminate the Town with your team.',
+  'Voodoo Lady':"Curses one Town player — only their vote counts tomorrow.",
+  'Mafia Murderer':'You committed the crime. Eliminate the Town.',
   'Mafia Accomplice':'Help the Murderer eliminate the Town.',
   'Mafia':'Work with your team to eliminate the Town.',
-  'Intelligence Agent':'Investigates one weapon or location each night to learn if it is part of the true crime.',
-  'Detective':'Scans one player per night to learn their alignment.',
-  'Doctor':'Protects one player from elimination each night. Can protect yourself.',
+  'Intelligence Agent':'Investigates one weapon or location each night.',
+  'Detective':'Scans one player per night to learn alignment.',
+  'Doctor':'Protects one player from elimination each night. Can self-protect.',
   'Mayor':'Your execution vote counts as two.',
-  'Socialite':'Distracts one player each night, canceling their night action.',
-  'Vigilante':'One bullet. Shoot someone dead at night — choose wisely.',
-  'Villager':'No special ability. Use logic and debate to find the killers.'
+  'Socialite':'Distracts one player, canceling their night action.',
+  'Vigilante':'One bullet — shoot someone dead at night.',
+  'Villager':'No special ability. Use logic and debate.'
 };
 const ROLE_ICONS = {
   Doctor:'🏥',Detective:'🔍',Mayor:'🏛️','Intelligence Agent':'🕵️',Socialite:'🥂',Vigilante:'🔫',
@@ -515,151 +574,296 @@ const ROLE_ICONS = {
 };
 const PHASE_TIPS = {
   INTRO:'Memorize your role. Mafia — watch for your 15-second window.',
-  INTERROGATION:'Choose a suspect then lock in your Who / Where / What guess.',
+  INTERROGATION:'Choose a suspect, then lock in your Who / Where / What.',
   DAY:'Discuss the clues. Tap Ready to Vote when done.',
-  DAY_VOTE:"Vote to execute someone — or skip.",
+  DAY_VOTE:'Vote to execute someone — or skip.',
   NIGHT:'Eyes closed unless the Narrator calls your role.',
   FINALE:'Submit your final official accusation.',
   LOBBY:'Waiting for the host.',
-  GAME_OVER:'The game is over. Check the recap!'
+  GAME_OVER:'Game over — check the recap!'
 };
 
 // ============================================
-// GUIDE
+// GUIDE BUILDER
 // ============================================
-function buildGuide() {
-  const m = ['Godfather','Logic Jammer','Consigliere','Framer','Voodoo Lady','Mafia Murderer','Mafia Accomplice'];
-  const t = ['Intelligence Agent','Detective','Doctor','Mayor','Socialite','Vigilante','Villager'];
-  document.getElementById('guide-mafia').innerHTML = m.map(r=>`<div class="guide-role-entry"><div class="guide-role-name">${ROLE_ICONS[r]||''} ${r}</div><div class="guide-role-desc">${ROLE_DESC[r]}</div></div>`).join('');
-  document.getElementById('guide-town').innerHTML  = t.map(r=>`<div class="guide-role-entry"><div class="guide-role-name">${ROLE_ICONS[r]||''} ${r}</div><div class="guide-role-desc">${ROLE_DESC[r]}</div></div>`).join('');
+function buildGuide(){
+  const m=['Godfather','Logic Jammer','Consigliere','Framer','Voodoo Lady','Mafia Murderer','Mafia Accomplice'];
+  const t=['Intelligence Agent','Detective','Doctor','Mayor','Socialite','Vigilante','Villager'];
+  document.getElementById('guide-mafia').innerHTML=m.map(r=>`<div class="guide-role-entry"><div class="guide-role-name">${ROLE_ICONS[r]||''} ${r}</div><div class="guide-role-desc">${ROLE_DESC[r]}</div></div>`).join('');
+  document.getElementById('guide-town').innerHTML=t.map(r=>`<div class="guide-role-entry"><div class="guide-role-name">${ROLE_ICONS[r]||''} ${r}</div><div class="guide-role-desc">${ROLE_DESC[r]}</div></div>`).join('');
 }
 buildGuide();
 
 // ============================================
 // HOST ROLE TOGGLE CARDS
 // ============================================
-const TOWN_ROLE_DEFS = [
-  {id:'role-doctor',key:'doctor',name:'Doctor',icon:'🏥',desc:'Protects one player each night.'},
-  {id:'role-detective',key:'detective',name:'Detective',icon:'🔍',desc:'Scans one player per night.'},
-  {id:'role-mayor',key:'mayor',name:'Mayor',icon:'🏛️',desc:'Vote counts as two.'},
-  {id:'role-agent',key:'agent',name:'Intelligence Agent',icon:'🕵️',desc:'Investigates a weapon or location.'},
-  {id:'role-socialite',key:'socialite',name:'Socialite',icon:'🥂',desc:'Cancels one night action.'},
-  {id:'role-vigilante',key:'vigilante',name:'Vigilante',icon:'🔫',desc:'One bullet — shoot someone at night.'},
+const TOWN_ROLE_DEFS=[
+  {id:'role-doctor',name:'Doctor',icon:'🏥',desc:'Protects one player each night.'},
+  {id:'role-detective',name:'Detective',icon:'🔍',desc:'Scans one player per night.'},
+  {id:'role-mayor',name:'Mayor',icon:'🏛️',desc:'Vote counts as two.'},
+  {id:'role-agent',name:'Intelligence Agent',icon:'🕵️',desc:'Investigates weapon or location.'},
+  {id:'role-socialite',name:'Socialite',icon:'🥂',desc:'Cancels one night action.'},
+  {id:'role-vigilante',name:'Vigilante',icon:'🔫',desc:'One bullet — shoot at night.'},
 ];
-const MAFIA_ROLE_DEFS = [
-  {id:'role-godfather',key:'godfather',name:'Godfather',icon:'👑',desc:'Immune to Detective scans.'},
-  {id:'role-framer',key:'framer',name:'Framer',icon:'🖼️',desc:'Makes a player appear Mafia.'},
-  {id:'role-jammer',key:'jammer',name:'Logic Jammer',icon:'📡',desc:"Corrupts a player's next guess result."},
-  {id:'role-consigliere',key:'consigliere',name:'Consigliere',icon:'📜',desc:'Investigates a weapon or location.'},
-  {id:'role-voodoo',key:'voodoo',name:'Voodoo Lady',icon:'🔮',desc:"Only the cursed player's vote counts."},
+const MAFIA_ROLE_DEFS=[
+  {id:'role-godfather',name:'Godfather',icon:'👑',desc:'Immune to Detective scans.'},
+  {id:'role-framer',name:'Framer',icon:'🖼️',desc:'Makes a player appear Mafia.'},
+  {id:'role-jammer',name:'Logic Jammer',icon:'📡',desc:"Corrupts a player's guess result."},
+  {id:'role-consigliere',name:'Consigliere',icon:'📜',desc:'Investigates weapon or location.'},
+  {id:'role-voodoo',name:'Voodoo Lady',icon:'🔮',desc:"Only cursed player's vote counts."},
 ];
-function buildRoleGrid(defs, containerId, isMafia) {
-  const grid = document.getElementById(containerId);
-  const defaultOn = ['role-doctor','role-detective'];
-  defs.forEach(r => {
-    const on = defaultOn.includes(r.id);
-    const card = document.createElement('div');
-    card.className = 'role-toggle-card' + (on ? (isMafia?' active-mafia':' active') : '');
-    card.id = r.id;
-    card.onclick = () => { const a = isMafia?'active-mafia':'active'; card.classList.toggle(a); };
-    card.innerHTML = `<div class="role-toggle-pill"></div><div class="role-card-name" style="color:${isMafia?'var(--mafia)':'var(--town)'}">${r.icon} ${r.name}</div><div class="role-card-desc">${r.desc}</div>`;
+function buildRoleGrid(defs,containerId,isMafia){
+  const grid=document.getElementById(containerId);
+  const defaultOn=['role-doctor','role-detective'];
+  defs.forEach(r=>{
+    const on=defaultOn.includes(r.id);
+    const card=document.createElement('div');
+    card.className='role-toggle-card'+(on?(isMafia?' active-mafia':' active'):'');
+    card.id=r.id;
+    card.onclick=()=>{const a=isMafia?'active-mafia':'active';card.classList.toggle(a);};
+    card.innerHTML=`<div class="role-toggle-pill"></div><div class="role-card-name" style="color:${isMafia?'var(--mafia)':'var(--town)'}">${r.icon} ${r.name}</div><div class="role-card-desc">${r.desc}</div>`;
     grid.appendChild(card);
   });
 }
 buildRoleGrid(TOWN_ROLE_DEFS,'town-roles-grid',false);
 buildRoleGrid(MAFIA_ROLE_DEFS,'mafia-roles-grid',true);
-function isRoleOn(id) { const el=document.getElementById(id); return el && (el.classList.contains('active')||el.classList.contains('active-mafia')); }
+function isRoleOn(id){const el=document.getElementById(id);return el&&(el.classList.contains('active')||el.classList.contains('active-mafia'));}
+
+// ============================================
+// AI OPTIONS TOGGLES (Feature 6)
+// ============================================
+function toggleAiOpt(btn, key){
+  const isOn = btn.classList.toggle('on');
+  // warning color for manual-phase and manual-roles
+  if(key==='manualPhaseProgression'||key==='manualRolePrompting'){
+    btn.classList.toggle('on-warning', isOn);
+    btn.classList.toggle('on', false);
+  }
+  pendingAiOptions[key] = isOn;
+}
+
+// Sync AI option toggles from server (after reconnect / reset)
+socket.on('ai_options_update', (opts) => {
+  const map = {
+    aiNarrationEnabled:'opt-ai-narration',
+    manualPhaseProgression:'opt-manual-phase',
+    liveActionFeedEnabled:'opt-live-feed',
+    revealCluePoisoning:'opt-poison',
+    manualRolePrompting:'opt-manual-roles'
+  };
+  Object.entries(map).forEach(([key,id])=>{
+    const btn=document.getElementById(id); if(!btn) return;
+    const isOn=!!opts[key];
+    btn.className='toggle-switch';
+    if(isOn){
+      if(key==='manualPhaseProgression'||key==='manualRolePrompting') btn.classList.add('on-warning');
+      else btn.classList.add('on');
+    }
+    pendingAiOptions[key]=isOn;
+  });
+  // Show/hide manual controls and live feed based on options
+  document.getElementById('manual-phase-controls').classList.toggle('hidden', !opts.manualPhaseProgression);
+  document.getElementById('live-feed-section').classList.toggle('hidden', !opts.liveActionFeedEnabled);
+  document.getElementById('manual-role-section').classList.toggle('hidden', !opts.manualRolePrompting);
+
+  timerPaused = opts.timerPaused;
+  const btn = document.getElementById('host-pause-btn');
+  if(btn) btn.innerText = timerPaused ? '▶ Resume' : '⏸ Pause';
+  document.getElementById('top-timer').classList.toggle('paused', timerPaused);
+});
+
+// Feature 6e: Clue board poisoning alert
+socket.on('clue_poisoning_update', (d)=>{
+  const el=document.getElementById('poison-alert');
+  if(el){ el.classList.remove('hidden'); el.innerHTML=`⚠️ Logic Jammer Active: <b>${d.jammerName}</b> poisoned <b>${d.targetName}</b>'s clue board`; }
+});
+
+// Feature 6f: Night role sequence for manual prompting
+socket.on('night_sequence_update', (seq)=>{
+  const container=document.getElementById('night-role-buttons');
+  if(!container) return;
+  container.innerHTML='';
+  seq.forEach(role=>{
+    const btn=document.createElement('button');
+    btn.className='night-role-wake-btn';
+    btn.innerHTML=`${ROLE_ICONS[role]||'🌙'} Wake ${role}`;
+    btn.onclick=()=>socket.emit('host_wake_role', role);
+    container.appendChild(btn);
+  });
+  // Also add a "Resolve Night" button if sequence is empty
+  if(seq.length===0){
+    const btn=document.createElement('button');
+    btn.className='night-role-wake-btn';
+    btn.style.background='var(--green-dim)';btn.style.color='#7affaa';btn.style.borderColor='var(--green)';
+    btn.innerHTML='✅ Resolve Night';
+    btn.onclick=()=>socket.emit('host_force_next');
+    container.appendChild(btn);
+  }
+});
+
+socket.on('live_feed_update', (entry)=>{
+  const log=document.getElementById('live-feed-log');
+  if(!log) return;
+  const p=document.createElement('p'); p.innerText=`• ${entry}`; log.appendChild(p); log.scrollTop=log.scrollHeight;
+});
+
+socket.on('timer_paused', ()=>{
+  document.getElementById('top-timer').classList.add('paused');
+  const btn=document.getElementById('host-pause-btn');
+  if(btn) btn.innerText='▶ Resume';
+  timerPaused=true;
+});
+socket.on('timer_resumed', ()=>{
+  document.getElementById('top-timer').classList.remove('paused');
+  const btn=document.getElementById('host-pause-btn');
+  if(btn) btn.innerText='⏸ Pause';
+  timerPaused=false;
+});
+function hostPauseTimer(){ socket.emit('host_pause_timer'); }
 
 // ============================================
 // UTILITIES
 // ============================================
-function showToast(msg, type='success') {
-  const t=document.createElement('div'); t.className=`toast ${type}`; t.innerText=msg;
+function showToast(msg,type='success'){
+  const t=document.createElement('div');t.className=`toast ${type}`;t.innerText=msg;
   document.getElementById('toast-container').appendChild(t);
   setTimeout(()=>t.remove(),5100);
 }
-
-// Game event notification banner (bottom of screen)
-function showGameEvent(icon, message, type='info') {
-  const container = document.getElementById('game-event-container');
-  const el = document.createElement('div');
-  el.className = `game-event ${type}`;
-  el.innerHTML = `<span class="game-event-icon">${icon}</span><span class="game-event-msg">${message}</span>`;
-  container.appendChild(el);
-  setTimeout(()=>el.remove(), 7000);
+function showGameEvent(icon,message,type='info'){
+  const el=document.createElement('div');
+  el.className=`game-event ${type}`;
+  el.innerHTML=`<span class="game-event-icon">${icon}</span><span class="game-event-msg">${message}</span>`;
+  document.getElementById('game-event-container').appendChild(el);
+  setTimeout(()=>el.remove(),8000);
 }
+socket.on('game_event',(d)=>showGameEvent(d.icon,d.message,d.type||'info'));
 
-socket.on('game_event', (d) => { showGameEvent(d.icon, d.message, d.type||'info'); });
-
-function spinNum(id,delta) { const el=document.getElementById(id); el.value=Math.max(parseInt(el.min)||0,(parseInt(el.value)||0)+delta); }
-function toggleAccordion(btnId,bodyId) { const btn=document.getElementById(btnId); const body=document.getElementById(bodyId); const open=body.classList.toggle('hidden'); btn.classList.toggle('open',!open); }
-function startTopTimer(durationSec) {
+function spinNum(id,delta){const el=document.getElementById(id);el.value=Math.max(parseInt(el.min)||0,(parseInt(el.value)||0)+delta);}
+function toggleAccordion(btnId,bodyId){
+  const btn=document.getElementById(btnId);const body=document.getElementById(bodyId);
+  const hidden=body.classList.toggle('hidden');btn.classList.toggle('open',!hidden);
+}
+function startTopTimer(durationSec){
   clearInterval(topTimerInterval);
-  const el=document.getElementById('top-timer'); el.classList.remove('hidden');
+  const el=document.getElementById('top-timer');el.classList.remove('hidden');
   const end=Date.now()+durationSec*1000;
-  function tick() { const rem=Math.max(0,Math.round((end-Date.now())/1000)); const m=String(Math.floor(rem/60)).padStart(2,'0'); const s=String(rem%60).padStart(2,'0'); el.innerText=`${m}:${s}`; if(rem<=0)clearInterval(topTimerInterval); }
-  tick(); topTimerInterval=setInterval(tick,500);
+  function tick(){
+    if(timerPaused) return;
+    const rem=Math.max(0,Math.round((end-Date.now())/1000));
+    const m=String(Math.floor(rem/60)).padStart(2,'0'),s=String(rem%60).padStart(2,'0');
+    el.innerText=`${m}:${s}`;
+    if(rem<=0)clearInterval(topTimerInterval);
+  }
+  tick();topTimerInterval=setInterval(tick,500);
 }
-async function enableNoSleep() { if('wakeLock' in navigator){try{await navigator.wakeLock.request('screen');}catch(e){}} }
-function toggleGuide() { document.getElementById('guide-modal-overlay').classList.toggle('hidden'); }
-function toggleClueBoard() {
+async function enableNoSleep(){if('wakeLock' in navigator){try{await navigator.wakeLock.request('screen');}catch(e){}}}
+function toggleGuide(){document.getElementById('guide-modal-overlay').classList.toggle('hidden');}
+function toggleClueBoard(){
   clueBoardOpen=!clueBoardOpen;
   document.getElementById('clue-board-body').classList.toggle('hidden',!clueBoardOpen);
   document.getElementById('clue-board-header').classList.toggle('open',clueBoardOpen);
   document.getElementById('clue-board-arrow').innerText=clueBoardOpen?'▴':'▾';
 }
-function toggleAdminBody() {
+function toggleAdminBody(){
   adminBodyOpen=!adminBodyOpen;
   document.getElementById('host-admin-body').classList.toggle('open',adminBodyOpen);
   document.getElementById('host-admin-arrow').innerText=adminBodyOpen?'▴':'▾';
 }
-function toggleRoleCard() {
-  const body=document.getElementById('role-card-body'); const arrow=document.getElementById('role-card-arrow');
-  const open=body.classList.toggle('open'); arrow.innerText=open?'▴':'▾';
+function toggleRoleCard(){
+  const body=document.getElementById('role-card-body'),arrow=document.getElementById('role-card-arrow');
+  const open=body.classList.toggle('open');arrow.innerText=open?'▴':'▾';
 }
-function toggleTruth() {
+function toggleTruth(){
   truthVisible=!truthVisible;
   document.getElementById('host-truth-card').classList.toggle('hidden',!truthVisible);
   document.getElementById('truth-toggle-btn').innerText=truthVisible?'🙈 Hide The Truth':'🔍 Show The Truth';
 }
-function toggleNarrator() {
+// Feature 3: Clicking the narrator header or button minimizes/expands
+function toggleNarrator(){
   narratorMinimized=!narratorMinimized;
   document.getElementById('narrator-body').style.display=narratorMinimized?'none':'block';
   document.getElementById('narrator-current').classList.toggle('visible',narratorMinimized);
   document.getElementById('narrator-minimize-btn').innerText=narratorMinimized?'▴ Expand':'▾ Minimize';
   document.getElementById('narrator-minimize-label').style.display=narratorMinimized?'block':'none';
 }
-function resetForm() {
+function resetForm(){
   ['vibe-input','config-wep','config-loc'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('config-mafia').value=1; document.getElementById('config-max-rounds').value=3;
-  document.getElementById('config-timer').value=60; document.getElementById('config-day-timer').value=120;
-  document.getElementById('config-vote-timer').value=30; document.getElementById('config-clues').value=2;
+  document.getElementById('config-mafia').value=1;document.getElementById('config-max-rounds').value=3;
+  document.getElementById('config-timer').value=60;document.getElementById('config-day-timer').value=120;
+  document.getElementById('config-vote-timer').value=30;document.getElementById('config-clues').value=2;
   document.getElementById('config-blind').checked=false;
 }
 
 // ============================================
-// NARRATOR — minimizable, current line display
+// MODAL SYSTEM — with reopen button (Feature 2)
 // ============================================
-socket.on('narrator_event', (d) => {
+function openModal(title,subtitle,bodyHTML,footerHTML='',type=null,data=null){
+  document.getElementById('action-modal-title').innerText=title;
+  document.getElementById('action-modal-subtitle').innerText=subtitle;
+  document.getElementById('action-modal-body').innerHTML=bodyHTML;
+  document.getElementById('action-modal-footer').innerHTML=footerHTML;
+  document.getElementById('action-modal-overlay').classList.remove('hidden');
+  // Store for reopen
+  currentModalType=type;
+  currentModalData=data;
+  updateReopenBtn(false); // hide reopen while modal is open
+}
+function closeModal(){
+  document.getElementById('action-modal-overlay').classList.add('hidden');
+  // Show reopen button if there's something to reopen
+  if(currentModalType) updateReopenBtn(true);
+}
+function updateReopenBtn(visible){
+  const btn=document.getElementById('reopen-action-btn');
+  if(!currentModalType||!visible){btn.classList.remove('visible');return;}
+  const labels={
+    'vote':'🗳️ Reopen Vote',
+    'guess':'🔍 Reopen Guess',
+    'night':'🌙 Reopen Action',
+    'finale':'⚖️ Reopen Accusation'
+  };
+  btn.innerText=labels[currentModalType]||'↩ Reopen';
+  btn.classList.toggle('visible',visible);
+}
+function reopenCurrentModal(){
+  if(!currentModalType||!currentModalData) return;
+  if(currentModalType==='vote') openVoteModal(currentModalData);
+  else if(currentModalType==='guess') openGuessModal(currentModalData);
+  else if(currentModalType==='night') openNightModal(currentModalData);
+  else if(currentModalType==='finale') { document.getElementById('finale-form').classList.remove('hidden'); document.getElementById('finale-status').classList.add('hidden'); }
+  updateReopenBtn(false);
+}
+function handleOverlayClick(e){
+  if(e.target===document.getElementById('action-modal-overlay'))closeModal();
+}
+socket.on('close_night_action',()=>{
+  closeModal();
+  currentModalType=null;currentModalData=null;
+  updateReopenBtn(false);
+});
+
+// ============================================
+// NARRATOR
+// ============================================
+socket.on('narrator_event',(d)=>{
   const l=document.getElementById('narrator-log');
-  const li=document.createElement('li'); li.innerText=d.msg; l.appendChild(li); l.scrollTop=l.scrollHeight;
-  // Always update the current-line display for minimized mode
-  const cur=document.getElementById('narrator-current'); cur.innerText=d.msg;
+  const li=document.createElement('li');li.innerText=d.msg;l.appendChild(li);l.scrollTop=l.scrollHeight;
+  document.getElementById('narrator-current').innerText=d.msg;
   document.getElementById('narrator-minimize-label').innerText=d.msg;
-  if(isHost) synth.speak(new SpeechSynthesisUtterance(d.msg));
+  if(isHost)synth.speak(new SpeechSynthesisUtterance(d.msg));
 });
 
 // ============================================
 // CLUE BOARD
 // ============================================
-function setClueState(name,state) {
+function setClueState(name,state){
   localStorage.setItem(`clue_${myId}_${name}`,state);
   const btn=document.querySelector(`.clue-btn[data-name="${CSS.escape(name)}"]`);
   if(btn){btn.className=`clue-btn state-${state}`;btn.querySelector('.clue-icon').innerText=['❓','❌','⚠️','✅'][state]||'❓';}
   socket.emit('update_clue_board',{name,state});
 }
-function buildClueCategory(containerId,items,isPlayerList=false) {
-  const container=document.getElementById(containerId); container.innerHTML='';
+function buildClueCategory(containerId,items,isPlayerList=false){
+  const container=document.getElementById(containerId);container.innerHTML='';
   items.forEach(item=>{
     const name=isPlayerList?item.name:item;
     const s=parseInt(localStorage.getItem(`clue_${myId}_${name}`)||0);
@@ -683,12 +887,11 @@ socket.on('restore_clue_board',(boardState)=>{
 socket.on('graveyard_update',(list)=>{
   if(!isHost&&document.getElementById('ref-players').innerHTML!=='')buildClueCategory('ref-players',list,true);
   if(isHost){
-    const al=list.filter(p=>p.isAlive);
     const el=document.getElementById('host-admin-player-list');
     if(el)el.innerHTML=list.map(p=>`<div class="host-player-row"><div class="host-player-status ${p.isAlive?'alive':'dead'}"></div><div class="host-player-name">${p.name}</div><div class="host-player-role">${p.role||''}</div><div class="host-player-actions">${p.isAlive?`<button class="btn btn-dark-red btn-sm" onclick="confirmForceKill('${p.id}','${p.name}')">☠️</button>`:''}<button class="btn btn-ghost btn-sm" style="color:var(--text-muted);" onclick="socket.emit('host_kick_player','${p.id}')">✕</button></div></div>`).join('');
     ['host-player-roster-lobby','host-tools-roster'].forEach(rid=>{
-      const roster=document.getElementById(rid); if(!roster)return; roster.innerHTML='';
-      list.forEach(p=>{const pill=document.createElement('div');pill.className='player-pill';pill.innerHTML=`<div class="player-avatar">👤</div><span class="player-pill-name">${p.name}</span><button class="player-pill-kick" onclick="socket.emit('host_kick_player','${p.id}')">✕</button>`;roster.appendChild(pill);});
+      const r=document.getElementById(rid);if(!r)return;r.innerHTML='';
+      list.forEach(p=>{const pill=document.createElement('div');pill.className='player-pill';pill.innerHTML=`<div class="player-avatar">👤</div><span class="player-pill-name">${p.name}</span><button class="player-pill-kick" onclick="socket.emit('host_kick_player','${p.id}')">✕</button>`;r.appendChild(pill);});
     });
   }
 });
@@ -703,11 +906,10 @@ socket.on('toast_msg',(d)=>{
   showToast(d.text,d.type);
   if(d.notepadText){const np=document.getElementById('clue-notepad');np.value+=d.notepadText;localStorage.setItem('mafia_notepad_'+myId,np.value);}
   if(d.guess){
-    const opt=document.querySelector(`#action-modal-body .action-chip[data-id="${d.guess.murderer}"]`);
-    const pName=opt?opt.innerText:(d.guess.murdererName||d.guess.murderer);
+    const pName=d.guess.murdererName||d.guess.murderer;
     [pName,d.guess.location,d.guess.weapon].forEach(name=>{
       let cur=parseInt(localStorage.getItem(`clue_${myId}_${name}`)||0),next=cur;
-      if(d.score===3)next=3; else if(d.score===0)next=1; else if(d.score>0&&cur===0)next=2;
+      if(d.score===3)next=3;else if(d.score===0)next=1;else if(d.score>0&&cur===0)next=2;
       setClueState(name,next);
     });
   }
@@ -728,7 +930,7 @@ socket.on('host_truth',(d)=>{
 socket.on('you_were_kicked',()=>{
   localStorage.removeItem('mafia_id');
   myId='p'+Math.random().toString(36).substr(2,8);
-  localStorage.setItem('mafia_id',myId); myCoreRole='';
+  localStorage.setItem('mafia_id',myId);myCoreRole='';
   document.getElementById('game-board').classList.add('hidden');
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
@@ -747,8 +949,11 @@ function joinLobby(){
   document.getElementById('player-lobby-wait').classList.remove('hidden');
   enableNoSleep();
 }
+// BUG 5 FIX: joinAsHost now shows the game-board with host admin panel if game is running,
+// or shows host-setup if in LOBBY. The claim_host event triggers phase_change which handles routing.
 function joinAsHost(){
-  isHost=true; socket.emit('claim_host');
+  isHost=true;
+  socket.emit('claim_host');
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('lobby-screen').classList.remove('hidden');
   document.getElementById('host-setup').classList.remove('hidden');
@@ -757,6 +962,9 @@ function joinAsHost(){
 }
 socket.on('connect',()=>socket.emit('rejoin_attempt',myId));
 socket.on('rejoin_success',()=>{document.getElementById('login-screen').classList.add('hidden');});
+socket.on('host_success',()=>{
+  // BUG 5 FIX: host_success no longer needs to do anything — phase_change handles routing
+});
 socket.on('update_players',(list)=>{
   document.getElementById('player-count-badge').innerText=list.length+' players in lobby';
   document.getElementById('player-list-names').innerText=list.map(p=>p.name).join('\n');
@@ -773,6 +981,7 @@ function startGame(){
     customLocations:document.getElementById('config-loc').value,
     cluesPerExecution:document.getElementById('config-clues').value,
     blindExecutions:document.getElementById('config-blind').checked,
+    aiOptions:{...pendingAiOptions},
     roles:{
       doctor:isRoleOn('role-doctor'),detective:isRoleOn('role-detective'),mayor:isRoleOn('role-mayor'),
       agent:isRoleOn('role-agent'),socialite:isRoleOn('role-socialite'),vigilante:isRoleOn('role-vigilante'),
@@ -782,7 +991,7 @@ function startGame(){
   });
 }
 function confirmForceKill(pId,name){
-  if(confirm(`Force-kill ${name}?\n\nMarks them as dead and unblocks the game. Use for disconnected/bugged players only.`))
+  if(confirm(`Force-kill ${name}?\n\nMarks them dead and unblocks the game. Use for disconnected/bugged players only.`))
     socket.emit('host_force_kill',pId);
 }
 
@@ -815,6 +1024,7 @@ socket.on('phase_change',(p)=>{
   document.body.style.background=(p==='NIGHT'||p==='INTRO')?'#080810':'var(--bg)';
 
   if(p==='LOBBY'){
+    // BUG 5 FIX: When host clicks "Host Display", phase_change LOBBY routes correctly to setup
     document.getElementById('lobby-screen').classList.remove('hidden');
     document.getElementById('game-board').classList.add('hidden');
     document.getElementById('role-card').classList.add('hidden');
@@ -824,42 +1034,53 @@ socket.on('phase_change',(p)=>{
     document.getElementById('clue-notepad').value='';
     document.getElementById('host-admin-panel').classList.add('hidden');
     document.getElementById('action-modal-overlay').classList.add('hidden');
+    currentModalType=null;currentModalData=null;updateReopenBtn(false);
     for(let k in localStorage){if(k.startsWith(`clue_${myId}`))localStorage.removeItem(k);}
     localStorage.removeItem('mafia_notepad_'+myId);
+    // BUG 5 FIX: If host, show setup panel. If not yet identified, do nothing.
+    if(isHost){
+      document.getElementById('host-setup').classList.remove('hidden');
+      document.getElementById('host-roster-card').classList.remove('hidden');
+    }
     return;
   }
+
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('game-board').classList.remove('hidden');
   if(!isHost)document.getElementById('role-card').classList.remove('hidden');
   if(isHost)document.getElementById('host-admin-panel').classList.remove('hidden');
 
-  if(p==='INTRO'){document.getElementById('role-card-body').classList.add('open');document.getElementById('role-card-arrow').innerText='▴';}
-  else{document.getElementById('role-card-body').classList.remove('open');document.getElementById('role-card-arrow').innerText='▾';}
+  if(p==='INTRO'){
+    document.getElementById('role-card-body').classList.add('open');
+    document.getElementById('role-card-arrow').innerText='▴';
+  } else {
+    document.getElementById('role-card-body').classList.remove('open');
+    document.getElementById('role-card-arrow').innerText='▾';
+  }
 
   document.getElementById('intro-zone').classList.toggle('hidden',p!=='INTRO');
   document.getElementById('interrogation-zone').classList.toggle('hidden',p!=='INTERROGATION');
   document.getElementById('finale-zone').classList.toggle('hidden',p!=='FINALE');
   if(p!=='DAY'&&p!=='DAY_VOTE')document.getElementById('day-zone').classList.add('hidden');
   if(p!=='INTRO')document.getElementById('mafia-intro-zone').classList.add('hidden');
-  // Close the action modal on any phase change except when we explicitly open it
-  if(p!=='INTERROGATION'&&p!=='DAY_VOTE'&&p!=='NIGHT')document.getElementById('action-modal-overlay').classList.add('hidden');
+  // Close modal on phase transitions unless it's the player's active phase
+  if(p!=='INTERROGATION'&&p!=='DAY_VOTE'&&p!=='NIGHT'){
+    document.getElementById('action-modal-overlay').classList.add('hidden');
+    if(p!=='FINALE'){currentModalType=null;currentModalData=null;updateReopenBtn(false);}
+  }
+  // Clear live feed and night roles on new night
+  if(p==='NIGHT'){
+    const lf=document.getElementById('live-feed-log');if(lf)lf.innerHTML='';
+    const pa=document.getElementById('poison-alert');if(pa)pa.classList.add('hidden');
+  }
 });
 
 // ============================================
 // TIMERS
 // ============================================
 socket.on('start_intro_timer',(s)=>{
+  // Bug 1 FIX: Only update the top-bar timer — the card timer element has been removed from HTML
   startTopTimer(s);
-  const cardTimer=document.getElementById('intro-card-timer');
-  const cardLabel=document.getElementById('intro-card-label');
-  if(!cardTimer)return;
-  cardTimer.innerText=s;
-  const endMs=Date.now()+s*1000;
-  const tick=setInterval(()=>{
-    const rem=Math.max(0,Math.round((endMs-Date.now())/1000));
-    cardTimer.innerText=rem;
-    if(rem<=0){clearInterval(tick);if(cardLabel)cardLabel.innerText='Please wait…';cardTimer.innerText='';}
-  },500);
 });
 socket.on('start_day_timer',(s)=>{
   startTopTimer(s);
@@ -884,46 +1105,33 @@ function emitReady(){
 }
 
 // ============================================
-// UNIFIED MODAL SYSTEM
-// All popups use openModal(title, subtitle, bodyHTML, footerHTML)
-// ============================================
-function openModal(title, subtitle, bodyHTML, footerHTML='') {
-  document.getElementById('action-modal-title').innerText = title;
-  document.getElementById('action-modal-subtitle').innerText = subtitle;
-  document.getElementById('action-modal-body').innerHTML = bodyHTML;
-  document.getElementById('action-modal-footer').innerHTML = footerHTML;
-  document.getElementById('action-modal-overlay').classList.remove('hidden');
-}
-function closeModal() {
-  document.getElementById('action-modal-overlay').classList.add('hidden');
-}
-
-// ============================================
 // DAY VOTE MODAL
 // ============================================
+function openVoteModal(list){
+  let bodyHTML='';
+  list.forEach(p=>{
+    if(p.id!==myId) bodyHTML+=`<button class="vote-btn" onclick="submitVote('${p.id}','${p.name}')">${p.name}</button>`;
+  });
+  bodyHTML+=`<button class="vote-btn skip-btn" onclick="submitVote('SKIP','Skip')">⏭️ Skip Vote</button>`;
+  openModal('Vote to Execute','Choose a player to execute, or skip',bodyHTML,
+    `<div style="text-align:center;font-size:11px;color:var(--text-muted);">Tap a name to lock in your vote</div>`,
+    'vote', list
+  );
+}
 socket.on('prompt_day_vote',(list)=>{
   document.getElementById('day-zone').classList.remove('hidden');
   document.getElementById('day-timer-display').classList.add('hidden');
-
-  let bodyHTML = '';
-  list.forEach(p => {
-    if(p.id !== myId) bodyHTML += `<button class="vote-btn" onclick="submitVote('${p.id}','${p.name}')">${p.name}</button>`;
-  });
-  bodyHTML += `<button class="vote-btn skip-btn" onclick="submitVote('SKIP','Skip')">⏭️ Skip Vote</button>`;
-
-  openModal('Vote to Execute', 'Choose a player to execute, or skip', bodyHTML,
-    `<div style="text-align:center;font-size:11px;color:var(--text-muted);">Tap a name to lock in your vote</div>`
-  );
+  openVoteModal(list);
 });
-function submitVote(targetId, name) {
-  socket.emit('submit_day_vote', targetId);
-  closeModal();
-  if(targetId === 'SKIP') showGameEvent('⏭️', 'You skipped your vote.', 'neutral');
-  else showGameEvent('🗳️', `Vote locked in: ${name}.`, 'info');
+function submitVote(targetId,name){
+  socket.emit('submit_day_vote',targetId);closeModal();
+  if(targetId==='SKIP') showGameEvent('⏭️','You skipped your vote.','neutral');
+  else showGameEvent('🗳️',`Vote locked in: ${name}.`,'info');
+  currentModalType=null;currentModalData=null;updateReopenBtn(false);
 }
 
 // ============================================
-// INTERROGATION MODAL
+// INTERROGATION
 // ============================================
 socket.on('interrogation_update',(d)=>{
   const s=document.getElementById('interrogation-status');
@@ -933,165 +1141,141 @@ socket.on('interrogation_update',(d)=>{
   if(d.status==='SELECTING_TARGET'&&d.activePlayerId===myId){
     s.innerText='🎯 Select your target:';
     d.players.forEach(p=>{
-      if(p.id===myId)return;
-      const b=document.createElement('button');
-      b.className='vote-btn';b.innerText=p.name;
+      if(p.id===myId) return;
+      const b=document.createElement('button');b.className='vote-btn';b.innerText=p.name;
       b.onclick=()=>socket.emit('interrogate_target',p.id);
       t.appendChild(b);
     });
+    // Clear any lingering modal from a previous turn
+    document.getElementById('action-modal-overlay').classList.add('hidden');
+    currentModalType=null;currentModalData=null;updateReopenBtn(false);
   } else if(d.status==='TICKING'){
     s.innerText=`${d.activePlayerName} is questioning ${d.targetName}…`;
     startTopTimer(d.duration);
-    // H3 FIX: Only close the modal if it belongs to this player's guess prompt
-    // and it's no longer their turn. Don't blindly close for all players.
-    if(d.activePlayerId !== myId) closeModal();
+    // H3 FIX: Only close modal if it's not this player's active guess
+    if(d.activePlayerId!==myId){
+      document.getElementById('action-modal-overlay').classList.add('hidden');
+    }
   } else if(d.status==='GUESSING'){
     s.innerText=`${d.activePlayerName} is locking in their guess…`;
-    if(d.activePlayerId===myId&&currentGuessData)openGuessModal(currentGuessData);
+    // BUG 4 FIX: Only reopen modal for the active player if it was dismissed
+    if(d.activePlayerId===myId&&currentGuessData&&document.getElementById('action-modal-overlay').classList.contains('hidden')){
+      openGuessModal(currentGuessData);
+    }
   } else {
     s.innerText=`Waiting for ${d.activePlayerName}…`;
   }
 });
 
-socket.on('prompt_clue_guess',(d)=>{ currentGuessData=d; openGuessModal(d); });
+socket.on('prompt_clue_guess',(d)=>{currentGuessData=d;openGuessModal(d);});
 
-function openGuessModal(d) {
+function openGuessModal(d){
   modalGuess={murderer:null,location:null,weapon:null};
-
-  // Suspects — alive only
-  let suspectHTML='<div class="action-section"><span class="action-section-icon">🕵️</span><div class="action-section-label">Suspect</div><div class="action-chips" id="modal-suspect-chips">';
+  let suspectHTML='<div class="action-section"><span class="action-section-icon">🕵️</span><div class="action-section-label">Suspect</div><div class="action-chips">';
   d.playerList.forEach(p=>{
     if(p.name&&p.name.startsWith('👻'))return;
     suspectHTML+=`<button class="action-chip" data-id="${p.id}" onclick="selectChip(this,'suspect','${p.id}','${p.name}')">${p.name}</button>`;
   });
   suspectHTML+='</div></div>';
-
-  // Locations
-  let locHTML='<div class="action-section"><span class="action-section-icon">📍</span><div class="action-section-label">Location</div><div class="action-chips" id="modal-location-chips">';
-  d.locations.forEach(loc=>{ locHTML+=`<button class="action-chip" onclick="selectChip(this,'location',null,'${loc}')">${loc}</button>`; });
+  let locHTML='<div class="action-section"><span class="action-section-icon">📍</span><div class="action-section-label">Location</div><div class="action-chips">';
+  d.locations.forEach(loc=>{locHTML+=`<button class="action-chip" onclick="selectChip(this,'location',null,'${loc}')">${loc}</button>`;});
   locHTML+='</div></div>';
-
-  // Weapons
-  let wepHTML='<div class="action-section"><span class="action-section-icon">🗡️</span><div class="action-section-label">Weapon</div><div class="action-chips" id="modal-weapon-chips">';
-  d.weapons.forEach(wep=>{ wepHTML+=`<button class="action-chip" onclick="selectChip(this,'weapon',null,'${wep}')">${wep}</button>`; });
+  let wepHTML='<div class="action-section"><span class="action-section-icon">🗡️</span><div class="action-section-label">Weapon</div><div class="action-chips">';
+  d.weapons.forEach(wep=>{wepHTML+=`<button class="action-chip" onclick="selectChip(this,'weapon',null,'${wep}')">${wep}</button>`;});
   wepHTML+='</div></div>';
-
-  openModal('Required Action','Choose Interrogation Targets', suspectHTML+locHTML+wepHTML,
-    `<button class="btn btn-primary" onclick="submitModalGuess()">Confirm Selection</button>
-     <button class="btn btn-ghost" style="margin-top:8px;font-size:12px;color:var(--text-muted);" onclick="reopenGuessModal()">↩ Reopen if dismissed</button>`
+  openModal('Required Action','Choose Interrogation Targets',suspectHTML+locHTML+wepHTML,
+    `<button class="btn btn-primary" onclick="submitModalGuess()">Confirm Selection</button>`,
+    'guess', d
   );
 }
-
-// FIX: Single gold color for ALL chip selections regardless of category
-function selectChip(btn, category, id, value) {
-  // Deselect all chips in the same section
+function selectChip(btn,category,id,value){
   btn.closest('.action-chips').querySelectorAll('.action-chip').forEach(c=>c.classList.remove('selected'));
   btn.classList.add('selected');
   if(category==='suspect'){modalGuess.murderer=id;modalGuess.murdererName=value;}
-  else if(category==='location'){modalGuess.location=value;}
-  else if(category==='weapon'){modalGuess.weapon=value;}
-}
-function reopenGuessModal(){
-  if(currentGuessData)openGuessModal(currentGuessData);
+  else if(category==='location')modalGuess.location=value;
+  else if(category==='weapon')modalGuess.weapon=value;
 }
 function submitModalGuess(){
   if(!modalGuess.murderer||!modalGuess.location||!modalGuess.weapon)
     return showToast('Select a suspect, location, and weapon!','error');
   socket.emit('submit_clue_guess',{murderer:modalGuess.murderer,location:modalGuess.location,weapon:modalGuess.weapon,murdererName:modalGuess.murdererName});
-  closeModal();
+  closeModal();currentModalType=null;currentModalData=null;updateReopenBtn(false);
 }
 
 // ============================================
-// NIGHT ACTION MODAL (all roles use this)
+// NIGHT ACTION MODAL
 // ============================================
+function openNightModal(d){
+  const roleIcon=ROLE_ICONS[d.role]||'🌙';
+  const subtitle=d.role==='Mafia'?'Mafia — Eyes Open':`${roleIcon} ${d.role} — Eyes Open`;
+  let bodyHTML='';
+
+  if(d.role==='Mafia'){
+    bodyHTML=`<div class="action-section" style="border-color:var(--red-dim);">
+      <div class="action-section-label" style="color:var(--red);">Mafia Chat</div>
+      <div id="mafia-modal-chat-box"></div>
+      <div class="modal-chat-row">
+        <input type="text" id="mafia-modal-chat-input" placeholder="Mafia chat…" onkeydown="if(event.key==='Enter')sendModalChat()">
+        <button class="btn btn-danger btn-sm" onclick="sendModalChat()">Send</button>
+      </div>
+    </div>
+    <div class="action-section"><div class="action-section-label">Choose Your Victim</div>`;
+    d.players.forEach(p=>{bodyHTML+=`<button class="night-chip" onclick="submitMafiaVote('${p.id}','${p.name}')">${p.name}</button>`;});
+    bodyHTML+='</div>';
+  } else if(['Consigliere','Intelligence Agent'].includes(d.role)){
+    bodyHTML='<div class="action-section"><div class="action-section-label">Investigate a Weapon</div>';
+    d.weapons.forEach(w=>{bodyHTML+=`<button class="night-chip" onclick="submitNightAction('${d.role}',null,'${w}')">${w}</button>`;});
+    bodyHTML+='</div><div class="action-section"><div class="action-section-label">Investigate a Location</div>';
+    d.locations.forEach(loc=>{bodyHTML+=`<button class="night-chip" onclick="submitNightAction('${d.role}',null,'${loc}')">${loc}</button>`;});
+    bodyHTML+='</div>';
+  } else {
+    bodyHTML='<div class="action-section"><div class="action-section-label">Choose a Target</div>';
+    d.players.forEach(p=>{
+      if(d.role!=='Doctor'&&p.id===myId) return;
+      bodyHTML+=`<button class="night-chip" onclick="submitNightAction('${d.role}','${p.id}',null)">${p.name}</button>`;
+    });
+    bodyHTML+='</div>';
+  }
+  openModal('Night Phase',subtitle,bodyHTML,
+    `<button class="btn btn-ghost" style="color:var(--text-muted);" onclick="submitNightAction('${d.role}',null,null)">⏭️ Skip Action</button>`,
+    'night', d
+  );
+  // Restore chat history
+  const chatBox=document.getElementById('mafia-modal-chat-box');
+  if(chatBox&&mafiaChatHistory.length>0)chatBox.innerHTML=mafiaChatHistory.join('');
+}
+
 socket.on('night_action_phase',(d)=>{
   const isMafiaRole=['Mafia','Godfather','Framer','Voodoo Lady','Logic Jammer','Consigliere'].includes(myCoreRole);
   if(d.role==='Mafia'&&!isMafiaRole)return;
   if(d.role!=='Mafia'&&d.role!==myCoreRole)return;
   startTopTimer(d.time);
-
-  if(d.role==='Mafia'){
-    // Mafia modal: chat + kill target
-    const chatSection=`
-      <div class="action-section" style="border-color:var(--red-dim);">
-        <div class="action-section-label" style="color:var(--red);">Mafia Chat</div>
-        <div id="mafia-modal-chat-box"></div>
-        <div class="modal-chat-row">
-          <input type="text" id="mafia-modal-chat-input" placeholder="Mafia chat…" onkeydown="if(event.key==='Enter')sendModalChat()">
-          <button class="btn btn-danger btn-sm" onclick="sendModalChat()">Send</button>
-        </div>
-      </div>`;
-    let targetsHTML='<div class="action-section"><div class="action-section-label">Choose Your Victim</div>';
-    d.players.forEach(p=>{
-      targetsHTML+=`<button class="night-chip" onclick="submitMafiaVote('${p.id}','${p.name}')">${p.name}</button>`;
-    });
-    targetsHTML+='</div>';
-    openModal('Night Phase', 'Mafia — Eyes Open', chatSection+targetsHTML, '');
-    // H2 FIX: Restore chat history from JS array (not a ghost DOM element)
-    const chatBox=document.getElementById('mafia-modal-chat-box');
-    if(chatBox && mafiaChatHistory.length > 0) chatBox.innerHTML = mafiaChatHistory.join('');
-  } else {
-    // All other night roles
-    const roleIcon=ROLE_ICONS[d.role]||'🌙';
-    const subtitle=`${roleIcon} ${d.role} — Eyes Open`;
-    let bodyHTML='';
-
-    if(['Consigliere','Intelligence Agent'].includes(d.role)){
-      bodyHTML='<div class="action-section"><div class="action-section-label">Investigate a Weapon</div>';
-      d.weapons.forEach(w=>{bodyHTML+=`<button class="night-chip" onclick="submitNightAction('${d.role}',null,'${w}')">${w}</button>`;});
-      bodyHTML+='</div><div class="action-section"><div class="action-section-label">Investigate a Location</div>';
-      d.locations.forEach(loc=>{bodyHTML+=`<button class="night-chip" onclick="submitNightAction('${d.role}',null,'${loc}')">${loc}</button>`;});
-      bodyHTML+='</div>';
-    } else {
-      bodyHTML='<div class="action-section"><div class="action-section-label">Choose a Target</div>';
-      d.players.forEach(p=>{
-        if(d.role!=='Doctor'&&p.id===myId)return;
-        bodyHTML+=`<button class="night-chip" onclick="submitNightAction('${d.role}','${p.id}',null)">${p.name}</button>`;
-      });
-      bodyHTML+='</div>';
-    }
-    openModal('Night Phase', subtitle, bodyHTML,
-      `<button class="btn btn-ghost" style="color:var(--text-muted);" onclick="submitNightAction('${d.role}',null,null)">⏭️ Skip Action</button>`
-    );
-  }
+  openNightModal(d);
 });
 
-function submitMafiaVote(targetId, name) {
-  socket.emit('mafia_vote', targetId);
-  closeModal();
-  showToast(`Target locked: ${name}`, 'warning');
+function submitMafiaVote(targetId,name){
+  socket.emit('mafia_vote',targetId);closeModal();
+  showToast(`Target locked: ${name}`,'warning');
+  currentModalType=null;currentModalData=null;updateReopenBtn(false);
 }
-function submitNightAction(role, targetId, targetItem) {
+function submitNightAction(role,targetId,targetItem){
   socket.emit('submit_night_action',{role,targetId:targetId||'SKIP',targetItem:targetItem||'SKIP'});
-  closeModal();
+  closeModal();currentModalType=null;currentModalData=null;updateReopenBtn(false);
 }
-function sendModalChat() {
-  const input=document.getElementById('mafia-modal-chat-input');
-  if(!input||!input.value.trim())return;
-  socket.emit('mafia_chat',input.value.trim());
-  input.value='';
+function sendModalChat(){
+  const i=document.getElementById('mafia-modal-chat-input');
+  if(!i||!i.value.trim())return;
+  socket.emit('mafia_chat',i.value.trim());i.value='';
 }
 
-socket.on('close_night_action',()=>{ closeModal(); });
-
-// Mafia chat updates — store in history array and update modal if open
 socket.on('mafia_chat_update',(d)=>{
-  // H2 FIX: Persist chat in JS array so history survives modal rebuild
   mafiaChatHistory.push(`<p><b>${d.sender}:</b> ${d.msg}</p>`);
-  const modalBox=document.getElementById('mafia-modal-chat-box');
-  if(modalBox) modalBox.innerHTML = mafiaChatHistory.join('');
+  const b=document.getElementById('mafia-modal-chat-box');
+  if(b)b.innerHTML=mafiaChatHistory.join('');
 });
-// H7 FIX: Click on the dark overlay (not the modal card itself) to close
-function handleOverlayClick(e) {
-  if(e.target === document.getElementById('action-modal-overlay')) closeModal();
-}
-
-// H2 FIX: Store mafia chat history in a JS array so it survives modal rebuilds
-let mafiaChatHistory = [];
-
 socket.on('clear_mafia_chat',()=>{
-  mafiaChatHistory = [];
-  const b=document.getElementById('mafia-modal-chat-box'); if(b)b.innerHTML='';
+  mafiaChatHistory=[];
+  const b=document.getElementById('mafia-modal-chat-box');if(b)b.innerHTML='';
 });
 
 // ============================================
@@ -1124,6 +1308,7 @@ socket.on('mafia_intro_chat_update',(d)=>{
 socket.on('prompt_finale_guess',(d)=>{
   document.getElementById('finale-form').classList.remove('hidden');
   document.getElementById('finale-status').classList.add('hidden');
+  currentModalType='finale';currentModalData=d;updateReopenBtn(false);
   const m=document.getElementById('finale-murderer'),l=document.getElementById('finale-location'),w=document.getElementById('finale-weapon');
   m.innerHTML='<option value="">Who?</option>';d.playerList.forEach(p=>m.innerHTML+=`<option value="${p.id}">${p.name}</option>`);
   l.innerHTML='<option value="">Where?</option>';d.locations.forEach(loc=>l.innerHTML+=`<option>${loc}</option>`);
@@ -1135,6 +1320,7 @@ function submitFinale(){
   socket.emit('submit_finale_guess',{murderer:m,location:l,weapon:w});
   document.getElementById('finale-form').classList.add('hidden');
   document.getElementById('finale-status').classList.remove('hidden');
+  currentModalType=null;currentModalData=null;updateReopenBtn(false);
 }
 
 // ============================================
