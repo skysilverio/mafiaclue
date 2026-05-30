@@ -85,6 +85,11 @@ function roleInGame(role) { return Object.values(players).some(p => p.role === r
 function broadcastGraveyard() { io.emit('graveyard_update', Object.values(players).map(p => ({ id: p.id, name: p.name, isAlive: p.isAlive, role: p.isAlive ? null : (gameConfig.blindExecutions ? '???' : p.role) }))); }
 function logEvent(type, description) { gameLog.push({ round: roundNumber, type, description }); }
 
+// Broadcast a game event notification to ALL clients (shown as a persistent banner)
+function broadcastGameEvent(icon, message, type = 'info') {
+    io.emit('game_event', { icon, message, type });
+}
+
 function calculateTTSDuration(text) {
     const wordCount = text.split(/\s+/).length;
     return Math.ceil((wordCount / 2.5) * 1000) + 1500;
@@ -297,13 +302,16 @@ io.on('connection', (socket) => {
             } else {
                 io.to(socket.id).emit('interrogation_update', reconnectState);
             }
-        } else if (gameState === 'DAY' || gameState === 'DAY_VOTE') {
+        } else if (gameState === 'DAY' || gameState === 'DAY_VOTE' || gameState === 'TALLYING') {
             const remaining = Math.max(0, Math.round((phaseEndTime - Date.now()) / 1000));
             if (gameState === 'DAY') io.to(socket.id).emit('start_day_timer', remaining);
-            if (gameState === 'DAY_VOTE') {
+            if (gameState === 'DAY_VOTE' || gameState === 'TALLYING') {
                 io.to(socket.id).emit('start_day_vote_timer', remaining);
                 const aliveList = Object.values(players).filter(p => p.isAlive).map(p => ({ id: p.id, name: p.name }));
-                if (!dayVotes[playerId] && players[playerId].isAlive) io.to(socket.id).emit('prompt_day_vote', aliveList);
+                // S5 FIX: Only re-prompt vote if still in DAY_VOTE (not TALLYING — too late to vote)
+                if (gameState === 'DAY_VOTE' && !dayVotes[playerId] && players[playerId].isAlive) {
+                    io.to(socket.id).emit('prompt_day_vote', aliveList);
+                }
             }
         } else if (gameState === 'NIGHT' && player.isAlive && currentNightRole) {
             let validTargets = Object.values(players).filter(p => p.isAlive);
@@ -404,6 +412,8 @@ io.on('connection', (socket) => {
         logEvent('force_kill', `Round ${roundNumber}: ${target.name} was removed from the game by the Host.`);
         narratorBroadcast(`${target.name} has been removed from the game.`, false);
         broadcastGraveyard();
+        // S2 FIX: Close any open night/vote action modal on the killed player's device
+        io.to(target.socketId).emit('close_night_action');
 
         // If it was their turn to interrogate, skip to the next turn
         if (gameState === 'INTERROGATION' && currentInterrogatorId === pId) {
@@ -536,6 +546,7 @@ io.on('connection', (socket) => {
         io.emit('start_intro_timer', 5);
 
         phaseTimeoutId = setTimeout(async () => {
+            // BUG FIX: was 20000ms — must match the 5s intro timer above
             await narratorBroadcastAndWait('Everyone, close your eyes. Mafia, open your eyes.', true);
 
             phaseEndTime = Date.now() + 15000;
@@ -552,7 +563,7 @@ io.on('connection', (socket) => {
                 await narratorBroadcastAndWait('Mafia, close your eyes. Everyone, open your eyes.', false);
                 startInterrogationPhase();
             }, 15000);
-        }, 20000);
+        }, 5000);
     }
 
     // ------------------------------------------
@@ -575,6 +586,7 @@ io.on('connection', (socket) => {
             if (perfectGuessThisRound) {
                 perfectGuessThisRound = false;
                 await narratorBroadcastAndWait('A stunning revelation — someone in this room has made a perfect deduction. Every piece of the puzzle, correct!', false);
+                broadcastGameEvent('🟢', 'A perfect deduction was made this round!', 'success');
             }
             return startDayPhase();
         }
@@ -704,6 +716,7 @@ io.on('connection', (socket) => {
         if (tie || !accId) {
             await narratorBroadcastAndWait('The town is deadlocked. No execution takes place.', false);
             logEvent('no_execution', `Round ${roundNumber}: Town was deadlocked. No one was executed.`);
+            broadcastGameEvent('🤝', 'The town is deadlocked — no execution today.', 'neutral');
         } else {
             players[accId].isAlive = false;
             let roleReveal = players[accId].role;
@@ -711,15 +724,22 @@ io.on('connection', (socket) => {
 
             if (gameConfig.blindExecutions) {
                 await narratorBroadcastAndWait(`${players[accId].name} was executed by the town. Their true role remains a mystery.`, false);
+                broadcastGameEvent('⚖️', `${players[accId].name} was executed. Role hidden.`, 'execution');
             } else {
                 await narratorBroadcastAndWait(`${players[accId].name} was executed by the town. They were a ${roleReveal}.`, false);
+                broadcastGameEvent('⚖️', `${players[accId].name} was executed — ${roleReveal}.`, 'execution');
             }
             logEvent('execution', `Round ${roundNumber}: ${players[accId].name} was executed. (${roleReveal})`);
 
             if (isMafiaTeam(players[accId].role)) {
                 const cluesToGive = parseInt(gameConfig.cluesPerExecution) || 0;
                 if (cluesToGive > 0) await narratorBroadcastAndWait('A search of their belongings revealed secrets...', false);
-                for (let i = 0; i < cluesToGive; i++) await narratorBroadcastAndWait(generateUniqueMafiaClue(), false);
+                for (let i = 0; i < cluesToGive; i++) {
+                    const clue = generateUniqueMafiaClue();
+                    await narratorBroadcastAndWait(clue, false);
+                    // S4 FIX: Broadcast each clue as a game event banner
+                    broadcastGameEvent('🔎', clue, 'info');
+                }
             }
         }
         broadcastGraveyard();
@@ -885,10 +905,9 @@ io.on('connection', (socket) => {
 
     async function resolveNight() {
         currentNightRole = null;
-        // BUG S3 FIX: Do NOT emit phase_change('DAY') here — startInterrogationPhase
-        // will immediately emit 'INTERROGATION', making this intermediate state a
-        // confusing flash. Let startInterrogationPhase set the correct state directly.
-        // gameState is set to 'DAY' briefly as an internal state but not broadcast.
+        // S1 FIX: Set a distinct resolving state so no phase checks misfire
+        // while night is being processed. startInterrogationPhase will set INTERROGATION.
+        gameState = 'NIGHT_RESOLVE';
 
         if (nightActions.jammerTarget) jammedPlayers.add(nightActions.jammerTarget);
 
@@ -904,6 +923,7 @@ io.on('connection', (socket) => {
                 text: '🍸 Distracted!', type: 'warning',
                 notepadText: '\n[NIGHT] You were distracted by the Socialite! Your night action failed.'
             });
+            // Personal notification only — don't broadcast who was distracted
             logEvent('distracted', `Round ${roundNumber}: ${players[blockedId].name} (${players[blockedId].role}) was distracted by the Socialite.`);
         }
 
@@ -913,15 +933,27 @@ io.on('connection', (socket) => {
                 let isEvil = isMafiaTeam(players[detTarget].role);
                 if (players[detTarget].role === 'Godfather') isEvil = false;
                 if (nightActions.framerTarget === detTarget) isEvil = true;
+                const scanResult = `Scan complete: ${players[detTarget].name} is ${isEvil ? 'Mafia' : 'Innocent'}!`;
                 io.to(nightActions.detectiveSocketId).emit('toast_msg', {
-                    text: `Scan: ${players[detTarget].name} is ${isEvil ? 'Mafia' : 'Innocent'}!`,
+                    text: `🔍 ${scanResult}`,
                     type: isEvil ? 'error' : 'success',
                     notepadText: `\n[NIGHT] ${players[detTarget].name} scanned as ${isEvil ? 'Mafia' : 'Innocent'}.`
+                });
+                // Private game_event only to the detective
+                io.to(nightActions.detectiveSocketId).emit('game_event', {
+                    icon: '🔍', message: scanResult, type: isEvil ? 'danger' : 'success'
                 });
             }
         }
 
         activeVoodooCurse = nightActions.voodooTarget;
+        if (activeVoodooCurse && players[activeVoodooCurse]) {
+            // Tell the cursed player privately
+            io.to(players[activeVoodooCurse].socketId).emit('game_event', {
+                icon: '🔮', message: 'You have been cursed by the Voodoo Lady! Tomorrow only your vote will count.', type: 'danger'
+            });
+        }
+
         const mTarget = nightActions.lockedMafiaTarget;
         const vigTarget = nightActions.vigilanteTarget;
         const diedTonight = [];
@@ -930,6 +962,10 @@ io.on('connection', (socket) => {
             diedTonight.push(mTarget);
         } else if (mTarget && mTarget === nightActions.doctorTarget) {
             logEvent('saved', `Round ${roundNumber}: ${players[mTarget].name} was targeted by Mafia but saved by the Doctor.`);
+            // Tell the saved player privately
+            io.to(players[mTarget].socketId).emit('game_event', {
+                icon: '💉', message: 'You were targeted last night but the Doctor saved your life!', type: 'success'
+            });
         }
 
         if (vigTarget && vigTarget !== nightActions.doctorTarget) {
@@ -937,6 +973,9 @@ io.on('connection', (socket) => {
             logEvent('vigilante_kill', `Round ${roundNumber}: ${players[vigTarget].name} was shot by the Vigilante.`);
         } else if (vigTarget && vigTarget === nightActions.doctorTarget) {
             logEvent('saved', `Round ${roundNumber}: ${players[vigTarget].name} was shot by the Vigilante but saved by the Doctor.`);
+            io.to(players[vigTarget].socketId).emit('game_event', {
+                icon: '💉', message: 'You were shot by the Vigilante but the Doctor saved your life!', type: 'success'
+            });
         }
 
         await narratorBroadcastAndWait('Morning comes. Everyone, open your eyes.', false);
@@ -949,6 +988,14 @@ io.on('connection', (socket) => {
             players[id].isAlive = false;
             logEvent('night_kill', `Round ${roundNumber}: ${players[id].name} (${players[id].role}) was eliminated during the night.`);
         });
+
+        // Broadcast night deaths as a game event after morning narration
+        if (diedTonight.length > 0) {
+            const names = diedTonight.map(id => players[id].name).join(' and ');
+            broadcastGameEvent('🌙', `${names} ${diedTonight.length === 1 ? 'was' : 'were'} eliminated during the night.`, 'danger');
+        } else {
+            broadcastGameEvent('🌙', 'The night passed peacefully — no one was harmed.', 'neutral');
+        }
 
         broadcastGraveyard();
         roundNumber++;
@@ -963,8 +1010,18 @@ io.on('connection', (socket) => {
         finaleGuesses = {};
         io.emit('phase_change', 'FINALE');
         await narratorBroadcastAndWait('The time of final judgment is here. Submit your accusations.', false);
+        // S6 FIX: Mark dead players with 👻 so clients can display them differently
+        // The murderer could be dead, so all players must appear as options
+        const finalePlayerList = Object.values(players).map(p => ({
+            id: p.id,
+            name: p.isAlive ? p.name : `👻 ${p.name}`
+        }));
         Object.values(players).filter(p => p.isAlive).forEach(p => {
-            io.to(p.socketId).emit('prompt_finale_guess', { weapons: activeWeapons, locations: activeLocations, playerList: Object.values(players) });
+            io.to(p.socketId).emit('prompt_finale_guess', {
+                weapons: activeWeapons,
+                locations: activeLocations,
+                playerList: finalePlayerList
+            });
         });
     }
 
