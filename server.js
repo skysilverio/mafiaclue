@@ -591,7 +591,7 @@ io.on('connection', (socket) => {
         io.emit('phase_change', 'INTRO');
         await narratorBroadcastAndWait('Welcome. Please look at your device now to memorize your secret role.', false);
 
-        const introStory = await getAIStory(global.gameTheme, 'The mystery begins. Briefly establish the setting based on the theme. End by telling everyone to close their eyes. Keep it to 2 or 3 sentences.');
+        const introStory = await getAIStory(global.gameTheme, 'The mystery begins. Briefly establish the setting based on the theme in 2 or 3 sentences. Do NOT tell anyone to close their eyes — that will be handled separately.');
         if (introStory) await narratorBroadcastAndWait(introStory, false);
 
         phaseEndTime = Date.now() + 5000;
@@ -900,6 +900,23 @@ io.on('connection', (socket) => {
             nightActions.detectiveSocketId = socket.id;
             nightActions.detectivePlayerId = p.id;
             if (aiOptions.liveActionFeedEnabled) pushLiveFeed(`${p.name} (Detective) scanned ${players[data.targetId]?.name}`);
+            // FIX Issue 4: Send Detective result IMMEDIATELY on submission so player reads it
+            // BEFORE "close your eyes" is narrated. Framer acts before Detective in nightSequence
+            // so nightActions.framerTarget is already resolved at this point.
+            // We only skip if the Detective themselves were distracted (socialiteTarget check
+            // happens in resolveNight, but Socialite acts FIRST in sequence so it's already set).
+            if (nightActions.socialiteTarget !== p.id) {
+                let isEvil = isMafiaTeam(players[data.targetId].role);
+                if (players[data.targetId].role === 'Godfather') isEvil = false;
+                if (nightActions.framerTarget === data.targetId) isEvil = true;
+                const scanResult = `Scan complete: ${players[data.targetId].name} is ${isEvil ? 'Mafia' : 'Innocent'}!`;
+                io.to(socket.id).emit('toast_msg', {
+                    text: `🔍 ${scanResult}`,
+                    type: isEvil ? 'error' : 'success',
+                    notepadText: `\n[NIGHT] ${players[data.targetId].name} scanned as ${isEvil ? 'Mafia' : 'Innocent'}.`
+                });
+                io.to(socket.id).emit('game_event', { icon: '🔍', message: scanResult, type: isEvil ? 'danger' : 'success' });
+            }
         }
 
         if (data.role === 'Vigilante' && p.role === 'Vigilante') {
@@ -981,17 +998,9 @@ io.on('connection', (socket) => {
             logEvent('distracted', `Round ${roundNumber}: ${players[blockedId].name} (${players[blockedId].role}) was distracted.`);
         }
 
-        if (nightActions.detectiveTarget && nightActions.detectiveSocketId) {
-            const detTarget = nightActions.detectiveTarget;
-            if (nightActions.socialiteTarget !== nightActions.detectivePlayerId) {
-                let isEvil = isMafiaTeam(players[detTarget].role);
-                if (players[detTarget].role === 'Godfather') isEvil = false;
-                if (nightActions.framerTarget === detTarget) isEvil = true;
-                const scanResult = `Scan complete: ${players[detTarget].name} is ${isEvil ? 'Mafia' : 'Innocent'}!`;
-                io.to(nightActions.detectiveSocketId).emit('toast_msg', { text: `🔍 ${scanResult}`, type: isEvil ? 'error' : 'success', notepadText: `\n[NIGHT] ${players[detTarget].name} scanned as ${isEvil ? 'Mafia' : 'Innocent'}.` });
-                io.to(nightActions.detectiveSocketId).emit('game_event', { icon: '🔍', message: scanResult, type: isEvil ? 'danger' : 'success' });
-            }
-        }
+        // Detective result is now sent immediately on submission (before close eyes narration)
+        // so we only need to handle the edge case where detective was distracted by Socialite
+        // (in that case no result was sent, which is correct — they were blocked)
 
         activeVoodooCurse = nightActions.voodooTarget;
         if (activeVoodooCurse && players[activeVoodooCurse]) {
