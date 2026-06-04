@@ -42,7 +42,6 @@ let dayVotes = {};
 let finaleGuesses = {};
 let readyPlayers = new Set();
 
-// Advanced Role State
 let vigilanteBullets = {};
 let activeVoodooCurse = null;
 let jammedPlayers = new Set();
@@ -54,33 +53,28 @@ let expectedNightSubmissions = 0;
 let currentNightSubmissions = 0;
 let nightTurnActive = false;
 
-// Server-side clue board state
 let clueBoardState = {};
-
-// Game event log for post-game recap
 let gameLog = [];
 let perfectGuessThisRound = false;
-
-// Circuit breaker for AI narrator
 let aiFailureCount = 0;
 const AI_CIRCUIT_BREAKER_LIMIT = 3;
 
-// AI Options — controlled by host config (Feature 6)
-let aiOptions = {
+// Canonical default AI options — used as the base for all resets/merges
+const DEFAULT_AI_OPTIONS = {
     aiNarrationEnabled: true,
     manualPhaseProgression: false,
-    timerPaused: false,
+    timerPaused: false,           // FIX S2: always explicitly reset
     liveActionFeedEnabled: false,
     revealCluePoisoning: false,
     manualRolePrompting: false
 };
 
-// Live action feed log for host (Feature 6d)
-let liveActionFeed = [];
+// FIX S2: aiOptions always starts from a clean copy of defaults
+let aiOptions = { ...DEFAULT_AI_OPTIONS };
 
-// Timer pause state
+let liveActionFeed = [];
 let pausedTimeRemaining = 0;
-let pausedTimerType = null; // 'phase' | 'night'
+let pausedTimerType = null;
 
 // ==========================================
 // HELPERS
@@ -100,7 +94,6 @@ function broadcastGraveyard() { io.emit('graveyard_update', Object.values(player
 function logEvent(type, description) { gameLog.push({ round: roundNumber, type, description }); }
 function broadcastGameEvent(icon, message, type = 'info') { io.emit('game_event', { icon, message, type }); }
 
-// Feature 6d: Push live action to host feed
 function pushLiveFeed(entry) {
     liveActionFeed.push(entry);
     if (hostSocketId) io.to(hostSocketId).emit('live_feed_update', entry);
@@ -111,7 +104,6 @@ function calculateTTSDuration(text) {
     return Math.ceil((wordCount / 2.5) * 1000) + 1500;
 }
 async function narratorBroadcastAndWait(message, isNight = false) {
-    // Feature 6a: If AI narration disabled, still broadcast but don't delay for AI-generated lines
     narratorBroadcast(message, isNight);
     await new Promise(resolve => setTimeout(resolve, calculateTTSDuration(message)));
 }
@@ -138,7 +130,7 @@ const FALLBACK_STORIES = [
 ];
 
 async function getAIStory(theme, contextPrompt, retries = 4) {
-    // Feature 6a: Respect AI narration toggle
+    // FIX: AI narration toggle — only gate the GENERATED stories, not scripted lines
     if (!aiOptions.aiNarrationEnabled) return '';
 
     if (aiFailureCount >= AI_CIRCUIT_BREAKER_LIMIT) {
@@ -204,9 +196,16 @@ function resetGameState() {
     perfectGuessThisRound = false;
     pausedTimeRemaining = 0;
     pausedTimerType = null;
+    // FIX S2: also reset timerPaused flag so next game never starts paused
+    aiOptions.timerPaused = false;
     clearTimeout(phaseTimeoutId);
     clearTimeout(nightTimerTimeout);
 }
+
+// FIX S6: clear readyPlayers at the top of startDayVoting
+// This helper is called here at module level so it's available to both
+// startDayPhase and the direct startDayVoting path from host_force_next
+function clearReadyPlayers() { readyPlayers.clear(); }
 
 // ==========================================
 // CORE SOCKET LOGIC
@@ -217,7 +216,6 @@ io.on('connection', (socket) => {
         if (!hostSocketId) {
             hostSocketId = socket.id;
             io.to(socket.id).emit('host_success');
-            // BUG 5 FIX: Always send phase_change to host so they see correct screen on claim
             io.to(socket.id).emit('phase_change', gameState);
             io.emit('update_players', Object.values(players));
             if (trueMurderer) {
@@ -228,7 +226,6 @@ io.on('connection', (socket) => {
                     location: trueLocation
                 });
             }
-            // Send current AI options to reconnecting host
             io.to(socket.id).emit('ai_options_update', aiOptions);
         }
     });
@@ -265,7 +262,6 @@ io.on('connection', (socket) => {
             });
         }
         broadcastGraveyard();
-
         if (clueBoardState[playerId]) io.to(socket.id).emit('restore_clue_board', clueBoardState[playerId]);
 
         if (gameState === 'INTRO' && isMafiaTeam(player.role)) {
@@ -279,7 +275,6 @@ io.on('connection', (socket) => {
             if (reconnectState.status === 'TICKING') {
                 reconnectState.duration = Math.max(0, Math.round((phaseEndTime - Date.now()) / 1000));
                 io.to(socket.id).emit('interrogation_update', reconnectState);
-                // BUG 4 FIX: Only re-send guess prompt to the ACTIVE interrogator, not all players
                 if (reconnectState.activePlayerId === playerId) {
                     const list = Object.values(players).map(p => ({ id: p.id, name: p.isAlive ? p.name : `👻 ${p.name}` }));
                     io.to(socket.id).emit('prompt_clue_guess', { weapons: activeWeapons, locations: activeLocations, playerList: list });
@@ -361,6 +356,11 @@ io.on('connection', (socket) => {
         else if (gameState === 'DAY_VOTE') tallyDayVotes();
         else if (gameState === 'INTERROGATION') nextInterrogationTurn();
         else if (gameState === 'NIGHT') {
+            // FIX S5: if manual role prompting and sequence is empty, resolve night directly
+            if (aiOptions.manualRolePrompting && nightSequence.length === 0 && !nightTurnActive) {
+                resolveNight();
+                return;
+            }
             if (!nightTurnActive) return;
             nightTurnActive = false;
             (async () => {
@@ -406,7 +406,8 @@ io.on('connection', (socket) => {
                 nightTurnActive = false;
                 clearTimeout(nightTimerTimeout);
                 (async () => {
-                    await new Promise(res => setTimeout(res, 1000));
+                    // FIX S4: use 4s pause (not 1s) so players can read their results
+                    await new Promise(res => setTimeout(res, 4000));
                     io.emit('close_night_action');
                     await narratorBroadcastAndWait(`${currentNightRole}, close your eyes.`, true);
                     await new Promise(res => setTimeout(res, 1000));
@@ -416,11 +417,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Feature 6: Update AI options from host panel
+    // FIX Bug 5: update_ai_options now works mid-game AND syncs back to client
     socket.on('update_ai_options', (opts) => {
         if (socket.id !== hostSocketId) return;
         aiOptions = { ...aiOptions, ...opts };
-        // Broadcast updated options back to host
         io.to(hostSocketId).emit('ai_options_update', aiOptions);
     });
 
@@ -428,7 +428,6 @@ io.on('connection', (socket) => {
     socket.on('host_pause_timer', () => {
         if (socket.id !== hostSocketId) return;
         if (!aiOptions.timerPaused) {
-            // Pause: save remaining time and clear timeouts
             aiOptions.timerPaused = true;
             if (gameState === 'NIGHT') {
                 pausedTimeRemaining = Math.max(0, Math.round((nightTimerEndTime - Date.now()) / 1000));
@@ -442,7 +441,6 @@ io.on('connection', (socket) => {
             io.emit('timer_paused', { remaining: pausedTimeRemaining });
             io.to(hostSocketId).emit('ai_options_update', aiOptions);
         } else {
-            // Resume: restart the timer with saved remaining time
             aiOptions.timerPaused = false;
             if (pausedTimerType === 'night') {
                 nightTimerEndTime = Date.now() + pausedTimeRemaining * 1000;
@@ -464,13 +462,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Feature 6f: Manual role prompting — host wakes up a specific role
     socket.on('host_wake_role', (role) => {
         if (socket.id !== hostSocketId) return;
         if (gameState !== 'NIGHT' || !aiOptions.manualRolePrompting) return;
-        // Remove the role from the queue if it's there and push it as current
         nightSequence = nightSequence.filter(r => r !== role);
-        // Directly process this role turn
         const rolePlayers = Object.values(players).filter(p => role === 'Mafia' ? isMafiaTeam(p.role) : p.role === role);
         const livingRolePlayers = rolePlayers.filter(p => p.isAlive);
         if (livingRolePlayers.length === 0) return;
@@ -491,7 +486,6 @@ io.on('connection', (socket) => {
 
         const msg = role === 'Mafia' ? 'Mafia, open your eyes.' : `${role}, open your eyes.`;
         narratorBroadcast(msg, true);
-
         livingRolePlayers.forEach(p => {
             io.to(p.socketId).emit('night_action_phase', { role, time, players: validTargets.map(v => ({ id: v.id, name: v.name })), weapons: activeWeapons, locations: activeLocations });
         });
@@ -504,6 +498,9 @@ io.on('connection', (socket) => {
             await new Promise(res => setTimeout(res, 1000));
             processNextNightTurn();
         }, time * 1000);
+
+        // FIX S5: update host with remaining sequence after waking a role
+        if (hostSocketId) io.to(hostSocketId).emit('night_sequence_update', [...nightSequence]);
     });
 
     // ------------------------------------------
@@ -539,8 +536,9 @@ io.on('connection', (socket) => {
         activeWeapons = (config.customWeapons && config.customWeapons.trim()) ? config.customWeapons.split(',').map(s => s.trim()).filter(s => s) : DEFAULT_WEAPONS;
         activeLocations = (config.customLocations && config.customLocations.trim()) ? config.customLocations.split(',').map(s => s.trim()).filter(s => s) : DEFAULT_LOCATIONS;
 
-        // Apply AI options from config if provided
-        if (config.aiOptions) aiOptions = { ...aiOptions, ...config.aiOptions };
+        // FIX Bug 2: Always start from clean defaults, then overlay only what client explicitly sent.
+        // This prevents stale values (e.g. timerPaused:true) leaking from a previous session.
+        aiOptions = { ...DEFAULT_AI_OPTIONS, ...(config.aiOptions || {}) };
 
         resetGameState();
         Object.values(players).forEach(p => { p.isAlive = true; p.role = null; p.kicked = false; });
@@ -574,6 +572,8 @@ io.on('connection', (socket) => {
 
         if (hostSocketId) {
             io.to(hostSocketId).emit('host_truth', { murdererName: players[trueMurderer]?.name, murdererRole: players[trueMurderer]?.role, weapon: trueWeapon, location: trueLocation });
+            // Send confirmed AI options back to host so client syncs
+            io.to(hostSocketId).emit('ai_options_update', aiOptions);
         }
 
         global.gameTheme = config.theme;
@@ -599,13 +599,10 @@ io.on('connection', (socket) => {
 
         phaseTimeoutId = setTimeout(async () => {
             await narratorBroadcastAndWait('Everyone, close your eyes. Mafia, open your eyes.', true);
-
             phaseEndTime = Date.now() + 15000;
             io.emit('start_intro_timer', 15);
-
             const mafiaRoster = Object.values(players).filter(p => isMafiaTeam(p.role)).map(p => `${p.name} (${getDisplayRole(p)})`).join(', ');
             io.to('mafia_room').emit('open_mafia_intro_chat', { roster: mafiaRoster, time: 15 });
-
             phaseTimeoutId = setTimeout(async () => {
                 io.to('mafia_room').emit('close_mafia_intro_chat');
                 await narratorBroadcastAndWait('Mafia, close your eyes. Everyone, open your eyes.', false);
@@ -651,7 +648,6 @@ io.on('connection', (socket) => {
         phaseEndTime = Date.now() + (durationSec * 1000);
         currentInterrogationState = { activePlayerId: currentInterrogatorId, activePlayerName: player.name, targetName: players[targetId].name, status: 'TICKING', duration: durationSec };
         io.emit('interrogation_update', currentInterrogationState);
-        // Feature 6b: Only set timeout if manual progression is off
         if (!aiOptions.manualPhaseProgression) {
             phaseTimeoutId = setTimeout(() => {
                 const list = Object.values(players).map(p => ({ id: p.id, name: p.isAlive ? p.name : `👻 ${p.name}` }));
@@ -662,7 +658,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Feature 6b: Host manually advances interrogation to guess phase
     socket.on('host_advance_interrogation', () => {
         if (socket.id !== hostSocketId) return;
         if (!aiOptions.manualPhaseProgression || gameState !== 'INTERROGATION') return;
@@ -720,6 +715,8 @@ io.on('connection', (socket) => {
     }
 
     async function startDayVoting() {
+        // FIX S6: always clear readyPlayers at voting start, even when called directly from host_force_next
+        readyPlayers.clear();
         gameState = 'DAY_VOTE';
         dayVotes = {};
         io.emit('phase_change', 'DAY_VOTE');
@@ -820,14 +817,9 @@ io.on('connection', (socket) => {
         const vigPlayer = Object.values(players).find(p => p.role === 'Vigilante' && p.isAlive);
         if (vigPlayer && vigilanteBullets[vigPlayer.id] > 0) nightSequence.push('Vigilante');
 
-        // Feature 6f: Send remaining night roles to host for manual prompting
         if (hostSocketId) io.to(hostSocketId).emit('night_sequence_update', [...nightSequence]);
 
-        // Feature 6b: If manual role prompting, wait for host to trigger each role
-        if (aiOptions.manualRolePrompting) {
-            // Just emit the sequence — host will trigger via host_wake_role
-            return;
-        }
+        if (aiOptions.manualRolePrompting) return;
         processNextNightTurn();
     }
 
@@ -836,7 +828,6 @@ io.on('connection', (socket) => {
         if (nightSequence.length === 0) return resolveNight();
 
         currentNightRole = nightSequence.shift();
-        // Feature 6f: Update host with remaining sequence
         if (hostSocketId) io.to(hostSocketId).emit('night_sequence_update', [...nightSequence]);
 
         const rolePlayers = Object.values(players).filter(p => currentNightRole === 'Mafia' ? isMafiaTeam(p.role) : p.role === currentNightRole);
@@ -852,7 +843,6 @@ io.on('connection', (socket) => {
         await narratorBroadcastAndWait(msg, true);
 
         nightTimerEndTime = Date.now() + (time * 1000);
-
         let validTargets = Object.values(players).filter(p => p.isAlive);
         if (currentNightRole === 'Socialite') validTargets = validTargets.filter(p => !livingRolePlayers.some(lp => lp.id === p.id));
         if (currentNightRole === 'Mafia') validTargets = validTargets.filter(p => !isMafiaTeam(p.role));
@@ -891,7 +881,6 @@ io.on('connection', (socket) => {
             const isCorrect = (data.targetItem === trueWeapon || data.targetItem === trueLocation);
             const itemCategory = activeWeapons.includes(data.targetItem) ? 'Weapon' : 'Location';
             io.to(socket.id).emit('toast_msg', { text: isCorrect ? '✅ Intel: TRUE' : '❌ Intel: FALSE', type: isCorrect ? 'success' : 'error', notepadText: `\n[NIGHT] ${itemCategory} "${data.targetItem}" is ${isCorrect ? 'part of the crime' : 'not involved'}.` });
-            // Feature 6d: Log intel to live feed
             if (aiOptions.liveActionFeedEnabled) pushLiveFeed(`${p.name} (${p.role}) investigated "${data.targetItem}" → ${isCorrect ? 'TRUE' : 'FALSE'}`);
         }
 
@@ -900,21 +889,18 @@ io.on('connection', (socket) => {
             nightActions.detectiveSocketId = socket.id;
             nightActions.detectivePlayerId = p.id;
             if (aiOptions.liveActionFeedEnabled) pushLiveFeed(`${p.name} (Detective) scanned ${players[data.targetId]?.name}`);
-            // FIX Issue 4: Send Detective result IMMEDIATELY on submission so player reads it
-            // BEFORE "close your eyes" is narrated. Framer acts before Detective in nightSequence
-            // so nightActions.framerTarget is already resolved at this point.
-            // We only skip if the Detective themselves were distracted (socialiteTarget check
-            // happens in resolveNight, but Socialite acts FIRST in sequence so it's already set).
+            // FIX Issue 4: Send result immediately on submission, before close eyes.
+            // FIX S1: Check if Framer was blocked by Socialite — if socialiteTarget is the Framer,
+            // treat framerTarget as null so the Detective gets the correct result.
             if (nightActions.socialiteTarget !== p.id) {
-                let isEvil = isMafiaTeam(players[data.targetId].role);
-                if (players[data.targetId].role === 'Godfather') isEvil = false;
-                if (nightActions.framerTarget === data.targetId) isEvil = true;
-                const scanResult = `Scan complete: ${players[data.targetId].name} is ${isEvil ? 'Mafia' : 'Innocent'}!`;
-                io.to(socket.id).emit('toast_msg', {
-                    text: `🔍 ${scanResult}`,
-                    type: isEvil ? 'error' : 'success',
-                    notepadText: `\n[NIGHT] ${players[data.targetId].name} scanned as ${isEvil ? 'Mafia' : 'Innocent'}.`
-                });
+                const detTarget = data.targetId;
+                const framerWasBlocked = nightActions.socialiteTarget && players[nightActions.socialiteTarget] && players[nightActions.socialiteTarget].role === 'Framer';
+                let isEvil = isMafiaTeam(players[detTarget].role);
+                if (players[detTarget].role === 'Godfather') isEvil = false;
+                // Only apply framer effect if framer was NOT blocked by Socialite
+                if (nightActions.framerTarget === detTarget && !framerWasBlocked) isEvil = true;
+                const scanResult = `Scan complete: ${players[detTarget].name} is ${isEvil ? 'Mafia' : 'Innocent'}!`;
+                io.to(socket.id).emit('toast_msg', { text: `🔍 ${scanResult}`, type: isEvil ? 'error' : 'success', notepadText: `\n[NIGHT] ${players[detTarget].name} scanned as ${isEvil ? 'Mafia' : 'Innocent'}.` });
                 io.to(socket.id).emit('game_event', { icon: '🔍', message: scanResult, type: isEvil ? 'danger' : 'success' });
             }
         }
@@ -927,16 +913,14 @@ io.on('connection', (socket) => {
             vigilanteBullets[p.id] = 0;
         }
 
-        // Feature 6d: Log other role actions
         if (aiOptions.liveActionFeedEnabled) {
-            if (data.role === 'Doctor' && data.targetId !== 'SKIP') pushLiveFeed(`${p.name} (Doctor) protected ${players[data.targetId]?.name}`);
+            if (data.role === 'Doctor' && data.targetId !== 'SKIP') pushLiveFeed(`${p.name} (Doctor) protected ${players[data.targetId]?.name || data.targetId}`);
             if (data.role === 'Socialite' && data.targetId !== 'SKIP') pushLiveFeed(`${p.name} (Socialite) distracted ${players[data.targetId]?.name}`);
             if (data.role === 'Framer' && data.targetId !== 'SKIP') pushLiveFeed(`${p.name} (Framer) framed ${players[data.targetId]?.name}`);
             if (data.role === 'Logic Jammer' && data.targetId !== 'SKIP') pushLiveFeed(`${p.name} (Logic Jammer) jammed ${players[data.targetId]?.name}`);
             if (data.role === 'Voodoo Lady' && data.targetId !== 'SKIP') pushLiveFeed(`${p.name} (Voodoo Lady) cursed ${players[data.targetId]?.name}`);
         }
 
-        // Feature 6e: Reveal clue board poisoning to host
         if (aiOptions.revealCluePoisoning && data.role === 'Logic Jammer' && data.targetId !== 'SKIP') {
             if (hostSocketId) io.to(hostSocketId).emit('clue_poisoning_update', { jammerName: p.name, targetName: players[data.targetId]?.name, targetId: data.targetId });
         }
@@ -998,9 +982,8 @@ io.on('connection', (socket) => {
             logEvent('distracted', `Round ${roundNumber}: ${players[blockedId].name} (${players[blockedId].role}) was distracted.`);
         }
 
-        // Detective result is now sent immediately on submission (before close eyes narration)
-        // so we only need to handle the edge case where detective was distracted by Socialite
-        // (in that case no result was sent, which is correct — they were blocked)
+        // Detective result already sent immediately on submission (before close eyes).
+        // No deferred result needed here.
 
         activeVoodooCurse = nightActions.voodooTarget;
         if (activeVoodooCurse && players[activeVoodooCurse]) {
@@ -1036,8 +1019,7 @@ io.on('connection', (socket) => {
         });
 
         if (diedTonight.length > 0) {
-            const names = diedTonight.map(id => players[id].name).join(' and ');
-            broadcastGameEvent('🌙', `${names} ${diedTonight.length === 1 ? 'was' : 'were'} eliminated during the night.`, 'danger');
+            broadcastGameEvent('🌙', `${diedTonight.map(id => players[id].name).join(' and ')} ${diedTonight.length === 1 ? 'was' : 'were'} eliminated during the night.`, 'danger');
         } else {
             broadcastGameEvent('🌙', 'The night passed peacefully — no one was harmed.', 'neutral');
         }
@@ -1090,13 +1072,15 @@ io.on('connection', (socket) => {
         if (socket.id !== hostSocketId) return;
         resetGameState();
         gameState = 'LOBBY';
-        // Reset AI options to defaults on full reset
-        aiOptions = { aiNarrationEnabled: true, manualPhaseProgression: false, timerPaused: false, liveActionFeedEnabled: false, revealCluePoisoning: false, manualRolePrompting: false };
+        // FIX Bug 2+3: Reset aiOptions to canonical defaults AND notify client so pendingAiOptions syncs
+        aiOptions = { ...DEFAULT_AI_OPTIONS };
         Object.values(players).forEach(p => { p.isAlive = true; p.role = null; p.kicked = false; });
         io.to('mafia_room').emit('close_mafia_intro_chat');
         io.emit('clear_mafia_chat');
         io.emit('phase_change', 'LOBBY');
         io.emit('update_players', Object.values(players));
+        // FIX Bug 3: Emit ai_options_update so client pendingAiOptions resets to defaults
+        if (hostSocketId) io.to(hostSocketId).emit('ai_options_update', aiOptions);
     });
 
     socket.on('disconnect', () => {
