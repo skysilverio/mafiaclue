@@ -605,6 +605,8 @@ function handleOverlayClick(e){if(e.target===document.getElementById('action-mod
 socket.on('close_night_action',()=>{closeModal();currentModalType=null;currentModalData=null;updateReopenBtn(false);});
 
 socket.on('narrator_event',(d)=>{
+  // When AI narration is disabled, suppress all narrator output (display + TTS)
+  if(d.aiNarrationEnabled===false) return;
   const l=document.getElementById('narrator-log');const li=document.createElement('li');li.innerText=d.msg;l.appendChild(li);l.scrollTop=l.scrollHeight;
   document.getElementById('narrator-current').innerText=d.msg;document.getElementById('narrator-minimize-label').innerText=d.msg;
   if(isHost)synth.speak(new SpeechSynthesisUtterance(d.msg));
