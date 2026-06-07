@@ -525,6 +525,16 @@ function isRoleOn(id){const el=document.getElementById(id);return el&&(el.classL
 // 1. Correctly reflects the current visual state
 // 2. Immediately updates dependent UI panels without waiting for server roundtrip
 // 3. Emits update_ai_options to server so mid-game changes take effect immediately
+// Show phase/role controls when narration is off OR their manual toggle is on
+function updateAdminPanelVisibility(){
+  const narrationOff=!pendingAiOptions.aiNarrationEnabled;
+  document.getElementById('manual-phase-controls').classList.toggle('hidden',
+    !pendingAiOptions.manualPhaseProgression && !narrationOff);
+  document.getElementById('manual-role-section').classList.toggle('hidden',
+    !pendingAiOptions.manualRolePrompting && !narrationOff);
+  document.getElementById('live-feed-section').classList.toggle('hidden',
+    !pendingAiOptions.liveActionFeedEnabled);
+}
 function toggleAiOpt(btn,key){
   const isWarning=(key==='manualPhaseProgression'||key==='manualRolePrompting');
   const wasOn=btn.classList.contains('on')||btn.classList.contains('on-warning');
@@ -532,12 +542,8 @@ function toggleAiOpt(btn,key){
   btn.className='toggle-switch';
   if(nowOn) btn.classList.add(isWarning?'on-warning':'on');
   pendingAiOptions[key]=nowOn;
-  // FIX Bug 5: Emit to server immediately so mid-game changes take effect
   socket.emit('update_ai_options',{[key]:nowOn});
-  // FIX Bug 4: Immediately update dependent UI without waiting for server roundtrip
-  if(key==='manualPhaseProgression') document.getElementById('manual-phase-controls').classList.toggle('hidden',!nowOn);
-  if(key==='liveActionFeedEnabled') document.getElementById('live-feed-section').classList.toggle('hidden',!nowOn);
-  if(key==='manualRolePrompting') document.getElementById('manual-role-section').classList.toggle('hidden',!nowOn);
+  updateAdminPanelVisibility();
 }
 
 // FIX Bug 3: ai_options_update now also resets pendingAiOptions on server-side reset
@@ -550,16 +556,36 @@ socket.on('ai_options_update',(opts)=>{
     // FIX Bug 3: Sync pendingAiOptions from server canonical values
     pendingAiOptions[key]=isOn;
   });
-  document.getElementById('manual-phase-controls').classList.toggle('hidden',!opts.manualPhaseProgression);
-  document.getElementById('live-feed-section').classList.toggle('hidden',!opts.liveActionFeedEnabled);
-  document.getElementById('manual-role-section').classList.toggle('hidden',!opts.manualRolePrompting);
+  updateAdminPanelVisibility();
   timerPaused=!!opts.timerPaused;
   const pb=document.getElementById('host-pause-btn');if(pb)pb.innerText=timerPaused?'▶ Resume':'⏸ Pause';
   document.getElementById('top-timer').classList.toggle('paused',timerPaused);
 });
 
 socket.on('clue_poisoning_update',(d)=>{const el=document.getElementById('poison-alert');if(el){el.classList.remove('hidden');el.innerHTML=`⚠️ Logic Jammer Active: <b>${d.jammerName}</b> poisoned <b>${d.targetName}</b>'s clue board`;}});
-socket.on('night_sequence_update',(seq)=>{const c=document.getElementById('night-role-buttons');if(!c)return;c.innerHTML='';seq.forEach(role=>{const btn=document.createElement('button');btn.className='night-role-wake-btn';btn.innerHTML=`${ROLE_ICONS[role]||'🌙'} Wake ${role}`;btn.onclick=()=>socket.emit('host_wake_role',role);c.appendChild(btn);});if(seq.length===0){const btn=document.createElement('button');btn.className='night-role-wake-btn';btn.style.cssText='background:var(--green-dim);color:#7affaa;border-color:var(--green);';btn.innerHTML='✅ Resolve Night';btn.onclick=()=>socket.emit('host_force_next');c.appendChild(btn);}});
+socket.on('night_sequence_update',(seq)=>{
+  const c=document.getElementById('night-role-buttons');if(!c)return;
+  c.innerHTML='';
+  seq.forEach(role=>{
+    const btn=document.createElement('button');btn.className='night-role-wake-btn';
+    btn.innerHTML=`${ROLE_ICONS[role]||'🌙'} Wake ${role}`;
+    btn.onclick=()=>socket.emit('host_wake_role',role);
+    c.appendChild(btn);
+  });
+  if(seq.length===0){
+    const btn=document.createElement('button');btn.className='night-role-wake-btn';
+    btn.style.cssText='background:var(--green-dim);color:#7affaa;border-color:var(--green);';
+    btn.innerHTML='✅ Resolve Night';
+    btn.onclick=()=>socket.emit('host_force_next');
+    c.appendChild(btn);
+  }
+  // Always reveal the wake-up section when there are roles to wake or sequence finished
+  const narrationOff=!pendingAiOptions.aiNarrationEnabled;
+  const manualRoles=pendingAiOptions.manualRolePrompting;
+  if(narrationOff||manualRoles){
+    document.getElementById('manual-role-section').classList.remove('hidden');
+  }
+});
 socket.on('live_feed_update',(entry)=>{const log=document.getElementById('live-feed-log');if(!log)return;const p=document.createElement('p');p.innerText=`• ${entry}`;log.appendChild(p);log.scrollTop=log.scrollHeight;});
 socket.on('timer_paused',()=>{document.getElementById('top-timer').classList.add('paused');const b=document.getElementById('host-pause-btn');if(b)b.innerText='▶ Resume';timerPaused=true;});
 socket.on('timer_resumed',(d)=>{
