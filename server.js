@@ -87,7 +87,7 @@ function shuffle(array) {
     return array;
 }
 function getPlayerBySocket(sockId) { return Object.values(players).find(p => p.socketId === sockId); }
-function narratorBroadcast(message, isNight = false) { io.emit('narrator_event', { msg: message, isNight }); }
+function narratorBroadcast(message, isNight = false) { io.emit('narrator_event', { msg: message, isNight, aiNarrationEnabled: aiOptions.aiNarrationEnabled }); }
 function isMafiaTeam(role) { return ['Mafia', 'Godfather', 'Framer', 'Voodoo Lady', 'Logic Jammer', 'Consigliere', 'Mafia Murderer', 'Mafia Accomplice'].includes(role); }
 function roleInGame(role) { return Object.values(players).some(p => p.role === role && p.isAlive); }
 function broadcastGraveyard() { io.emit('graveyard_update', Object.values(players).map(p => ({ id: p.id, name: p.name, isAlive: p.isAlive, role: p.isAlive ? null : (gameConfig.blindExecutions ? '???' : p.role) }))); }
